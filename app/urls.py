@@ -10,6 +10,9 @@ from core.views import (
     CustomTokenObtainPairView,
     CustomTokenRefreshView,
     CustomTokenVerifyView,
+    PedidoViewSet,
+    ProdutoViewSet,
+    PromocaoViewSet,
     UserRegistrationView,
     UserViewSet,
 )
@@ -17,6 +20,9 @@ from core.views import (
 router = DefaultRouter()
 
 router.register(r'usuarios', UserViewSet, basename='usuarios')
+router.register(r'produtos', ProdutoViewSet, basename='produtos')
+router.register(r'promocoes', PromocaoViewSet, basename='promocoes')
+router.register(r'pedidos', PedidoViewSet, basename='pedidos')
 
 urlpatterns = [
     path('admin/', admin.site.urls),

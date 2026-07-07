@@ -53,3 +53,33 @@ class UserAdmin(BaseUserAdmin):
 
 
 admin.site.register(models.User, UserAdmin)
+
+
+class ItemPedidoInline(admin.TabularInline):
+    """Permite ver/editar os itens de um pedido direto na tela do pedido."""
+
+    model = models.ItemPedido
+    extra = 0
+    readonly_fields = ['preco_unitario']
+
+
+@admin.register(models.Produto)
+class ProdutoAdmin(admin.ModelAdmin):
+    list_display = ['nome', 'categoria', 'preco', 'estoque', 'ativo']
+    list_filter = ['categoria', 'ativo']
+    search_fields = ['nome']
+
+
+@admin.register(models.Promocao)
+class PromocaoAdmin(admin.ModelAdmin):
+    list_display = ['produto', 'preco_promocional', 'data_inicio', 'data_fim']
+    list_filter = ['data_inicio', 'data_fim']
+    search_fields = ['produto__nome']
+
+
+@admin.register(models.Pedido)
+class PedidoAdmin(admin.ModelAdmin):
+    list_display = ['id', 'usuario', 'status', 'data', 'total']
+    list_filter = ['status']
+    search_fields = ['usuario__email', 'usuario__name']
+    inlines = [ItemPedidoInline]
