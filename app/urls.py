@@ -7,6 +7,7 @@ from drf_spectacular.views import (
 )
 from rest_framework.routers import DefaultRouter
 from core.views import (
+    CategoriaViewSet,
     CustomTokenObtainPairView,
     CustomTokenRefreshView,
     CustomTokenVerifyView,
@@ -20,6 +21,7 @@ from core.views import (
 router = DefaultRouter()
 
 router.register(r'usuarios', UserViewSet, basename='usuarios')
+router.register(r'categorias', CategoriaViewSet, basename='categorias')
 router.register(r'produtos', ProdutoViewSet, basename='produtos')
 router.register(r'promocoes', PromocaoViewSet, basename='promocoes')
 router.register(r'pedidos', PedidoViewSet, basename='pedidos')

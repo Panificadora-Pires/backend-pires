@@ -2,13 +2,19 @@ from rest_framework.viewsets import ModelViewSet
 
 from core.models import Produto
 from core.permissions import IsAdminOrReadOnly
-from core.serializers import ProdutoSerializer
+from core.serializers import ProdutoDetailSerializer, ProdutoListSerializer, ProdutoWriteSerializer
 
 
 class ProdutoViewSet(ModelViewSet):
     """RF02 — Cadastro de produto / RF09 — Consulta de cardápio do dia."""
 
-    queryset = Produto.objects.all().order_by('nome')
-    serializer_class = ProdutoSerializer
+    queryset = Produto.objects.select_related('categoria').all()
     permission_classes = [IsAdminOrReadOnly]
-    filterset_fields = ['categoria', 'ativo']
+    filterset_fields = ['categoria', 'ativo', 'destaque']
+
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return ProdutoListSerializer
+        if self.action in ('create', 'update', 'partial_update'):
+            return ProdutoWriteSerializer
+        return ProdutoDetailSerializer
