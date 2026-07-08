@@ -12,7 +12,9 @@ from datetime import date, timedelta
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
-from core.models import Categoria, ItemPedido, Pedido, Produto, Promocao, User
+from core.models import User
+from catalogo.models import Categoria, Produto, Promocao
+from pedidos.models import ItemPedido, Pedido
 
 SENHA_PADRAO = 'senha123'
 

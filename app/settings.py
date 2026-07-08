@@ -65,6 +65,9 @@ INSTALLED_APPS = [
 
     # Aplicações do projeto
     'core',
+    'catalogo',
+    'pedidos',
+    'notificacoes',
 ]
 
 # ============================================================
