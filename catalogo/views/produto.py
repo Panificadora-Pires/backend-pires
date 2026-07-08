@@ -1,8 +1,8 @@
 from rest_framework.viewsets import ModelViewSet
 
 from catalogo.models import Produto
-from core.permissions import IsAdminOrReadOnly
 from catalogo.serializers import ProdutoDetailSerializer, ProdutoListSerializer, ProdutoWriteSerializer
+from core.permissions import IsAdminOrReadOnly
 
 
 class ProdutoViewSet(ModelViewSet):
@@ -15,6 +15,6 @@ class ProdutoViewSet(ModelViewSet):
     def get_serializer_class(self):
         if self.action == 'list':
             return ProdutoListSerializer
-        if self.action in ('create', 'update', 'partial_update'):
+        if self.action in {'create', 'update', 'partial_update'}:
             return ProdutoWriteSerializer
         return ProdutoDetailSerializer

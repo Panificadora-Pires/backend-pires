@@ -6,6 +6,7 @@ from drf_spectacular.views import (
     SpectacularSwaggerView,
 )
 from rest_framework.routers import DefaultRouter
+
 from catalogo.views import CategoriaViewSet, ProdutoViewSet, PromocaoViewSet
 from core.views import (
     CustomTokenObtainPairView,
