@@ -1,8 +1,8 @@
 from rest_framework.viewsets import ModelViewSet
 
-from core.models import Produto
+from catalogo.models import Produto
 from core.permissions import IsAdminOrReadOnly
-from core.serializers import ProdutoDetailSerializer, ProdutoListSerializer, ProdutoWriteSerializer
+from catalogo.serializers import ProdutoDetailSerializer, ProdutoListSerializer, ProdutoWriteSerializer
 
 
 class ProdutoViewSet(ModelViewSet):
