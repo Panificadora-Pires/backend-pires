@@ -6,7 +6,7 @@ from django.db import models
 from django.utils import timezone
 from django.utils.text import slugify
 
-from core.validators import validar_tamanho_imagem, validar_tipo_imagem
+from catalogo.validators import validar_tamanho_imagem, validar_tipo_imagem
 
 from .categoria import Categoria
 

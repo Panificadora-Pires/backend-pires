@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from core.models import Categoria
+from catalogo.models import Categoria
 
 
 class CategoriaSerializer(serializers.ModelSerializer):

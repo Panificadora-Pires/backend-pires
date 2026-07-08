@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from core.models import Promocao
+from catalogo.models import Promocao
 
 
 class PromocaoSerializer(serializers.ModelSerializer):

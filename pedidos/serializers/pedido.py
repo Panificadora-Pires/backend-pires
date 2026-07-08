@@ -1,7 +1,9 @@
 from django.db import transaction
 from rest_framework import serializers
 
-from core.models import ItemPedido, Pedido, Produto
+from catalogo.models import Produto
+from pedidos.models import ItemPedido, Pedido
+from pedidos.signals import pedido_ficou_pronto
 
 
 class ItemPedidoSerializer(serializers.ModelSerializer):
@@ -44,8 +46,9 @@ class PedidoSerializer(serializers.ModelSerializer):
             'itens',
             'itens_criacao',
             'total',
+            'codigo_retirada',
         ]
-        read_only_fields = ['usuario', 'status', 'data']
+        read_only_fields = ['usuario', 'status', 'data', 'codigo_retirada']
 
     def validate_itens_criacao(self, itens):
         if not itens:
@@ -99,3 +102,39 @@ class PedidoStatusUpdateSerializer(serializers.ModelSerializer):
                 f'para "{dict(Pedido.Status.choices).get(novo_status, novo_status)}".'
             )
         return novo_status
+
+    def save(self, **kwargs):
+        status_anterior = self.instance.status
+        pedido = super().save(**kwargs)
+
+        # Dispara o signal só na transição pendente/confirmado -> pronto,
+        # nunca de novo se o status já era "pronto" (evita notificação duplicada).
+        if status_anterior != Pedido.Status.PRONTO and pedido.status == Pedido.Status.PRONTO:
+            pedido_ficou_pronto.send(sender=Pedido, pedido=pedido)
+
+        return pedido
+
+
+class RetiradaPorQRCodeSerializer(serializers.Serializer):
+    """Usado pela administração no balcão, ao ler o QR Code do aluno."""
+
+    codigo_retirada = serializers.UUIDField()
+
+    def validate_codigo_retirada(self, codigo_retirada):
+        try:
+            pedido = Pedido.objects.get(codigo_retirada=codigo_retirada)
+        except Pedido.DoesNotExist as exc:
+            raise serializers.ValidationError('Código de retirada inválido.') from exc
+
+        if not pedido.pode_transicionar_para(Pedido.Status.RETIRADO):
+            raise serializers.ValidationError(
+                f'Este pedido está com status "{pedido.get_status_display()}" e não pode ser retirado agora.'
+            )
+
+        self.pedido = pedido
+        return codigo_retirada
+
+    def save(self, **kwargs):
+        self.pedido.status = Pedido.Status.RETIRADO
+        self.pedido.save(update_fields=['status'])
+        return self.pedido

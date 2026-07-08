@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from core.models import Produto
+from catalogo.models import Produto
 
 
 class ProdutoListSerializer(serializers.ModelSerializer):

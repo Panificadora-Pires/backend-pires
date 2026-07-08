@@ -6,17 +6,17 @@ from drf_spectacular.views import (
     SpectacularSwaggerView,
 )
 from rest_framework.routers import DefaultRouter
+
+from catalogo.views import CategoriaViewSet, ProdutoViewSet, PromocaoViewSet
 from core.views import (
-    CategoriaViewSet,
     CustomTokenObtainPairView,
     CustomTokenRefreshView,
     CustomTokenVerifyView,
-    PedidoViewSet,
-    ProdutoViewSet,
-    PromocaoViewSet,
     UserRegistrationView,
     UserViewSet,
 )
+from notificacoes.views import NotificacaoViewSet
+from pedidos.views import PedidoViewSet
 
 router = DefaultRouter()
 
@@ -25,6 +25,7 @@ router.register(r'categorias', CategoriaViewSet, basename='categorias')
 router.register(r'produtos', ProdutoViewSet, basename='produtos')
 router.register(r'promocoes', PromocaoViewSet, basename='promocoes')
 router.register(r'pedidos', PedidoViewSet, basename='pedidos')
+router.register(r'notificacoes', NotificacaoViewSet, basename='notificacoes')
 
 urlpatterns = [
     path('admin/', admin.site.urls),

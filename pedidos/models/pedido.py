@@ -2,10 +2,10 @@
 Models de Pedido e ItemPedido.
 """
 
+import uuid
+
 from django.conf import settings
 from django.db import models
-
-from .produto import Produto
 
 
 class Pedido(models.Model):
@@ -34,6 +34,12 @@ class Pedido(models.Model):
     status = models.CharField(
         max_length=20, choices=Status.choices, default=Status.PENDENTE, verbose_name='status'
     )
+    # Token único usado para gerar o QR Code de retirada. Não é o ID sequencial
+    # do pedido de propósito: um UUID não é adivinhável, então ninguém
+    # consegue "retirar" o pedido de outra pessoa só testando IDs em sequência.
+    codigo_retirada = models.UUIDField(
+        default=uuid.uuid4, editable=False, unique=True, verbose_name='código de retirada'
+    )
 
     class Meta:
         """Meta options for the model."""
@@ -59,8 +65,10 @@ class ItemPedido(models.Model):
     """Item (produto + quantidade) dentro de um pedido."""
 
     pedido = models.ForeignKey(Pedido, on_delete=models.CASCADE, related_name='itens', verbose_name='pedido')
+    # Referência ao Produto via string ('catalogo.Produto') porque Produto
+    # mora em outro app — evita import circular entre catalogo e pedidos.
     produto = models.ForeignKey(
-        Produto, on_delete=models.PROTECT, related_name='itens_pedido', verbose_name='produto'
+        'catalogo.Produto', on_delete=models.PROTECT, related_name='itens_pedido', verbose_name='produto'
     )
     quantidade = models.PositiveIntegerField(verbose_name='quantidade')
     # Preço "congelado" no momento do pedido, para não ser afetado por mudanças
