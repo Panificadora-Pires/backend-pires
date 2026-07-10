@@ -22,7 +22,7 @@ dependencies = [
   'python-dotenv>=1.0.0',
   'python-magic-bin>=0.4.14; sys_platform == "win32"',
   'python-magic>=0.4.27; sys_platform == "linux"',
-  "qrcode>=8.2",
+  'qrcode>=7.4.2',
   'setuptools>=68.2.2',
   'uvicorn>=0.29.0',
   'whitenoise[brotli]>=6.6.0',
@@ -42,7 +42,7 @@ dev = "python manage.py runserver 127.0.0.1:8000"
 createsuperuser = "python manage.py createsuperuser"
 pre_migrate = "python manage.py makemigrations"
 migrate = "python manage.py migrate"
-post_migrate = "python manage.py graph_models -a -S -g -o backend.png"
+post_migrate = "python manage.py graph_models -S -g -o core.png core"
 shell = "python manage.py shell"
 shellp = "python manage.py shell_plus"
 test = "python manage.py test"
