@@ -1,4 +1,5 @@
 from django.db import transaction
+from django.utils import timezone
 from rest_framework import serializers
 
 from catalogo.models import Produto
@@ -105,6 +106,7 @@ class PedidoStatusUpdateSerializer(serializers.ModelSerializer):
 
     def save(self, **kwargs):
         status_anterior = self.instance.status
+        self.instance.status_atualizado_em = timezone.now()
         pedido = super().save(**kwargs)
 
         # Dispara o signal só na transição pendente/confirmado -> pronto,
@@ -136,5 +138,6 @@ class RetiradaPorQRCodeSerializer(serializers.Serializer):
 
     def save(self, **kwargs):
         self.pedido.status = Pedido.Status.RETIRADO
-        self.pedido.save(update_fields=['status'])
+        self.pedido.status_atualizado_em = timezone.now()
+        self.pedido.save(update_fields=['status', 'status_atualizado_em'])
         return self.pedido

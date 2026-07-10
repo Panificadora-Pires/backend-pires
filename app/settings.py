@@ -45,6 +45,15 @@ CSRF_TRUSTED_ORIGINS = FRONTEND_URLS
 CORS_ALLOW_CREDENTIALS = True
 
 # ============================================================
+# Regras de negócio do app pedidos
+# ============================================================
+
+# RN06 — tempo (em minutos) que um pedido pode ficar "pronto" sem ser
+# retirado antes de ser cancelado automaticamente pelo comando
+# `cancelar_pedidos_expirados`.
+PEDIDO_TEMPO_LIMITE_RETIRADA_MINUTOS = int(os.getenv('PEDIDO_TEMPO_LIMITE_RETIRADA_MINUTOS', '15'))
+
+# ============================================================
 # Aplicações instaladas
 # ============================================================
 
