@@ -1,4 +1,8 @@
-from drf_spectacular.utils import extend_schema
+from datetime import date
+from decimal import Decimal
+
+from django.db.models import F, Sum
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status as http_status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -6,7 +10,7 @@ from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
 from core.permissions import IsOwnerOrAdmin
-from pedidos.models import Pedido
+from pedidos.models import ItemPedido, Pedido
 from pedidos.serializers import PedidoSerializer, PedidoStatusUpdateSerializer, RetiradaPorQRCodeSerializer
 from pedidos.utils import gerar_qrcode_base64
 
@@ -88,3 +92,66 @@ class PedidoViewSet(ModelViewSet):
         pedido = serializer.save()
 
         return Response(PedidoSerializer(pedido).data, status=http_status.HTTP_200_OK)
+
+    @extend_schema(
+        summary='Relatório de vendas por período (RF11)',
+        description=(
+            'Soma as vendas de pedidos com status "retirado" dentro do período informado. '
+            'Apenas pedidos efetivamente retirados contam como venda concluída.'
+        ),
+        parameters=[
+            OpenApiParameter('data_inicio', str, description='Data inicial (formato YYYY-MM-DD)', required=True),
+            OpenApiParameter('data_fim', str, description='Data final (formato YYYY-MM-DD)', required=True),
+        ],
+        responses={200: None, 400: None, 403: None},
+    )
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    def relatorio_vendas(self, request):
+        if not request.user.is_staff:
+            return Response(
+                {'detail': 'Apenas a administração pode acessar relatórios.'},
+                status=http_status.HTTP_403_FORBIDDEN,
+            )
+
+        data_inicio_str = request.query_params.get('data_inicio')
+        data_fim_str = request.query_params.get('data_fim')
+
+        if not data_inicio_str or not data_fim_str:
+            return Response(
+                {'detail': 'Informe data_inicio e data_fim (formato YYYY-MM-DD).'},
+                status=http_status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            data_inicio = date.fromisoformat(data_inicio_str)
+            data_fim = date.fromisoformat(data_fim_str)
+        except ValueError:
+            return Response(
+                {'detail': 'Datas em formato inválido. Use YYYY-MM-DD.'},
+                status=http_status.HTTP_400_BAD_REQUEST,
+            )
+
+        pedidos_periodo = Pedido.objects.filter(
+            status=Pedido.Status.RETIRADO,
+            status_atualizado_em__date__gte=data_inicio,
+            status_atualizado_em__date__lte=data_fim,
+        )
+
+        total_pedidos = pedidos_periodo.count()
+
+        agregado = ItemPedido.objects.filter(pedido__in=pedidos_periodo).aggregate(
+            total_vendido=Sum(F('preco_unitario') * F('quantidade'))
+        )
+        total_vendido = agregado['total_vendido'] or Decimal('0.00')
+        ticket_medio = (total_vendido / total_pedidos) if total_pedidos else Decimal('0.00')
+
+        return Response(
+            {
+                'criterio': 'Considera apenas pedidos com status "retirado" dentro do período informado.',
+                'data_inicio': data_inicio,
+                'data_fim': data_fim,
+                'total_pedidos': total_pedidos,
+                'total_vendido': round(total_vendido, 2),
+                'ticket_medio': round(ticket_medio, 2),
+            }
+        )
