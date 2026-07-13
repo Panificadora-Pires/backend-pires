@@ -34,12 +34,23 @@ class Pedido(models.Model):
     status = models.CharField(
         max_length=20, choices=Status.choices, default=Status.PENDENTE, verbose_name='status'
     )
+    status_atualizado_em = models.DateTimeField(
+        auto_now=True,
+        verbose_name='status atualizado em',
+        help_text='Marca desde quando o pedido está no status atual (usado pela RN06).',
+    )
     # Token único usado para gerar o QR Code de retirada. Não é o ID sequencial
     # do pedido de propósito: um UUID não é adivinhável, então ninguém
     # consegue "retirar" o pedido de outra pessoa só testando IDs em sequência.
     codigo_retirada = models.UUIDField(
         default=uuid.uuid4, editable=False, unique=True, verbose_name='código de retirada'
     )
+    # Usado pela RN06 (cancelamento automático) e pelo relatório de vendas
+    # (RF11): marca desde quando o pedido está no status atual. Atualizado
+    # manualmente sempre que o status muda (ver PedidoStatusUpdateSerializer
+    # e RetiradaPorQRCodeSerializer) — decidi não usar auto_now porque isso
+    # atualizaria o campo em QUALQUER save(), não só quando o status muda.
+    status_atualizado_em = models.DateTimeField(auto_now_add=True, verbose_name='status atualizado em')
 
     class Meta:
         """Meta options for the model."""

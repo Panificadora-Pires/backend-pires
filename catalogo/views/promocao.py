@@ -1,8 +1,8 @@
 from rest_framework.viewsets import ModelViewSet
 
 from catalogo.models import Promocao
-from catalogo.serializers import PromocaoSerializer
 from core.permissions import IsAdminOrReadOnly
+from catalogo.serializers import PromocaoSerializer
 
 
 class PromocaoViewSet(ModelViewSet):
