@@ -152,7 +152,8 @@ Todos usam paginação por página (`page`, `page_size`, resposta com `total_pag
 | `/api/produtos/{id}/` | `GET` | qualquer autenticado | Detalhe do produto (inclui descrição e estoque) |
 | `/api/produtos/` | `POST`/`PUT`/`PATCH` | admin | Cadastro/edição — inclui `preco_custo` e `estoque_minimo`, nunca expostos ao aluno |
 | `/api/promocoes/` | `GET` | qualquer autenticado | Lista promoções (filtro: `?produto=`) |
-| `/api/promocoes/` | `POST`/`PUT`/`DELETE` | admin | CRUD de promoção |
+| `/api/promocoes/` | `POST`/`PUT`/`DELETE` | admin | CRUD de promoção — rejeita datas sobrepostas para o mesmo produto |
+| `/api/produtos/mais_vendidos/` | `GET` | admin | Ranking por quantidade vendida (RF12). Query opcionais: `?data_inicio=`, `?data_fim=`, `?limite=` (padrão 10) |
 
 **Importante:** o `ProdutoViewSet` troca de serializer conforme a ação (`ProdutoListSerializer` no `list`, `ProdutoWriteSerializer` no `create`/`update`, `ProdutoDetailSerializer` no resto) — por isso `preco_custo` nunca aparece em nenhuma resposta que o aluno recebe.
 
@@ -218,17 +219,28 @@ Implementada via **Django Signal** (`pedidos/signals.py` → `pedido_ficou_pront
 
 ---
 
-## 8. O que falta (visão rápida — detalhes no backlog de issues)
+## 8. Testes automatizados
 
-- RF12 (produtos mais vendidos) — endpoint ainda não implementado
-- Testes automatizados
-- Deploy em produção (Render) e configuração real do Cloudinary
-- Cron Job de produção pro `cancelar_pedidos_expirados`
-- Frontend (Vue) — ainda não iniciado
+```bash
+pdm run python manage.py test
+```
+
+41 testes cobrindo: RN02 (baixa de estoque), RN03 (estoque insuficiente), RN04 (todas as transições de status válidas/inválidas), RN05 (permissão de promoção), RN06 (cancelamento automático + devolução de estoque), congelamento de preço no pedido, QR Code (gerar/retirar/retirar duas vezes/código inválido), notificação automática ao ficar pronto (e não duplicar), permissões (aluno não vê pedido/notificação de outro, não altera status, não cadastra produto/promoção), sobreposição de datas em promoção, `preco_custo` nunca aparecendo pro aluno, e os relatórios RF11/RF12 (cálculo correto, exige admin, período vazio não quebra).
+
+Organizados em `pedidos/tests/` (`test_regras_negocio.py`, `test_qrcode_e_notificacao.py`, `test_rn06_cancelamento.py`, `test_relatorios.py`, com um `base.py` compartilhado) e `catalogo/tests.py`.
+
+## 9. O que falta (visão rápida — detalhes no backlog de issues)
+
+O núcleo funcional do backend está fechado: todas as regras de negócio da documentação (RN02–RN07) e todos os requisitos funcionais de relatório (RF11, RF12) estão implementados e testados. O que resta é **infraestrutura**, não lógica de negócio:
+
+- Configuração real do Cloudinary em produção
+- Deploy no Render (banco Postgres, variáveis de ambiente)
+- Cron Job de produção pro `cancelar_pedidos_expirados` (o comando existe e funciona, só falta agendá-lo)
+- Frontend (Vue) — ainda não iniciado, já existe protótipo visual de referência
 
 ---
 
-## 9. Referência rápida de todos os endpoints
+## 10. Referência rápida de todos os endpoints
 
 ```
 Autenticação
@@ -246,6 +258,7 @@ Catálogo
   POST   /api/categorias/                        [admin]
   GET    /api/produtos/
   POST   /api/produtos/                           [admin]
+  GET    /api/produtos/mais_vendidos/              [admin]
   GET    /api/promocoes/
   POST   /api/promocoes/                          [admin]
 
