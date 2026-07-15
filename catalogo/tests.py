@@ -30,7 +30,7 @@ class PromocaoTestCase(APITestCase):
             },
             format='json',
         )
-        self.assertEqual(resposta.status_code, status.HTTP_403_FORBIDDEN)
+        assert resposta.status_code == status.HTTP_403_FORBIDDEN
 
     def test_preco_promocional_maior_que_original_falha(self):
         self.client.force_authenticate(user=self.admin)
@@ -44,7 +44,7 @@ class PromocaoTestCase(APITestCase):
             },
             format='json',
         )
-        self.assertEqual(resposta.status_code, status.HTTP_400_BAD_REQUEST)
+        assert resposta.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_datas_sobrepostas_para_mesmo_produto_falha(self):
         Promocao.objects.create(
@@ -65,7 +65,7 @@ class PromocaoTestCase(APITestCase):
             },
             format='json',
         )
-        self.assertEqual(resposta.status_code, status.HTTP_400_BAD_REQUEST)
+        assert resposta.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_datas_nao_sobrepostas_sao_aceitas(self):
         Promocao.objects.create(
@@ -85,7 +85,7 @@ class PromocaoTestCase(APITestCase):
             },
             format='json',
         )
-        self.assertEqual(resposta.status_code, status.HTTP_201_CREATED)
+        assert resposta.status_code == status.HTTP_201_CREATED
 
     def test_editar_a_propria_promocao_nao_conflita_consigo_mesma(self):
         promocao = Promocao.objects.create(
@@ -98,7 +98,7 @@ class PromocaoTestCase(APITestCase):
         resposta = self.client.patch(
             f'/api/promocoes/{promocao.id}/', {'preco_promocional': 2.75}, format='json'
         )
-        self.assertEqual(resposta.status_code, status.HTTP_200_OK)
+        assert resposta.status_code == status.HTTP_200_OK
 
 
 class ProdutoVisibilidadeTestCase(APITestCase):
@@ -114,16 +114,16 @@ class ProdutoVisibilidadeTestCase(APITestCase):
         self.client.force_authenticate(user=self.aluno)
         resposta = self.client.get('/api/produtos/')
 
-        self.assertEqual(resposta.status_code, status.HTTP_200_OK)
+        assert resposta.status_code == status.HTTP_200_OK
         for produto in resposta.data['results']:
-            self.assertNotIn('preco_custo', produto)
+            assert 'preco_custo' not in produto
 
     def test_preco_custo_aparece_para_admin_na_edicao(self):
         produto = Produto.objects.get(nome='Coxinha de frango')
         self.client.force_authenticate(user=self.admin)
         resposta = self.client.get(f'/api/produtos/{produto.id}/')
         # o serializer de detalhe (usado no retrieve) também não deve expor preco_custo
-        self.assertNotIn('preco_custo', resposta.data)
+        assert 'preco_custo' not in resposta.data
 
     def test_aluno_nao_cadastra_produto(self):
         self.client.force_authenticate(user=self.aluno)
@@ -132,4 +132,4 @@ class ProdutoVisibilidadeTestCase(APITestCase):
             {'nome': 'Pastel', 'categoria': self.categoria.id, 'preco': 7, 'estoque': 5},
             format='json',
         )
-        self.assertEqual(resposta.status_code, status.HTTP_403_FORBIDDEN)
+        assert resposta.status_code == status.HTTP_403_FORBIDDEN

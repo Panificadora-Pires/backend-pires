@@ -24,7 +24,7 @@ class ProdutoViewSet(ModelViewSet):
     def get_serializer_class(self):
         if self.action == 'list':
             return ProdutoListSerializer
-        if self.action in ('create', 'update', 'partial_update'):
+        if self.action in {'create', 'update', 'partial_update'}:
             return ProdutoWriteSerializer
         return ProdutoDetailSerializer
 
@@ -37,7 +37,7 @@ class ProdutoViewSet(ModelViewSet):
         parameters=[
             OpenApiParameter('data_inicio', str, description='Data inicial (YYYY-MM-DD)', required=False),
             OpenApiParameter('data_fim', str, description='Data final (YYYY-MM-DD)', required=False),
-            OpenApiParameter('limite', int, description='Quantidade de produtos a retornar (padrão 10)', required=False),
+            OpenApiParameter('limite', int, description='Quantidade de produtos a retornar (padrão 10)', required=False),  # ruff:ignore[line-too-long]
         ],
         responses={200: None, 400: None, 403: None},
     )

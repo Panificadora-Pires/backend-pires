@@ -31,14 +31,14 @@ class CancelarPedidosExpiradosTestCase(CriaUsuariosEProdutosMixin, TestCase):
         call_command('cancelar_pedidos_expirados')
 
         pedido.refresh_from_db()
-        self.assertEqual(pedido.status, Pedido.Status.CANCELADO)
+        assert pedido.status == Pedido.Status.CANCELADO
 
     def test_nao_cancela_pedido_dentro_do_prazo(self):
         pedido = self._criar_pedido_pronto_ha(5)
         call_command('cancelar_pedidos_expirados')
 
         pedido.refresh_from_db()
-        self.assertEqual(pedido.status, Pedido.Status.PRONTO)
+        assert pedido.status == Pedido.Status.PRONTO
 
     def test_devolve_estoque_ao_cancelar(self):
         """Estoque cai na criação (simulada no helper) e deve voltar ao valor original após o cancelamento."""
@@ -47,7 +47,7 @@ class CancelarPedidosExpiradosTestCase(CriaUsuariosEProdutosMixin, TestCase):
         call_command('cancelar_pedidos_expirados')
 
         self.coxinha.refresh_from_db()
-        self.assertEqual(self.coxinha.estoque, estoque_antes)
+        assert self.coxinha.estoque == estoque_antes
 
     def test_nao_mexe_em_pedidos_de_outros_status(self):
         pendente = Pedido.objects.create(usuario=self.aluno, status=Pedido.Status.PENDENTE)
@@ -56,4 +56,4 @@ class CancelarPedidosExpiradosTestCase(CriaUsuariosEProdutosMixin, TestCase):
         call_command('cancelar_pedidos_expirados')
 
         pendente.refresh_from_db()
-        self.assertEqual(pendente.status, Pedido.Status.PENDENTE)
+        assert pendente.status == Pedido.Status.PENDENTE

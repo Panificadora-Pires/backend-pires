@@ -1,8 +1,7 @@
 """Testes do relatório de vendas (RF11) e produtos mais vendidos (RF12)."""
 
-from datetime import date, timedelta
+from datetime import date
 
-from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -29,40 +28,41 @@ class RelatorioVendasTestCase(CriaUsuariosEProdutosMixin, APITestCase):
     def test_requer_autenticacao_de_admin(self):
         self.client.force_authenticate(user=self.aluno)
         resposta = self.client.get(f'/api/pedidos/relatorio_vendas/?data_inicio={self.hoje}&data_fim={self.hoje}')
-        self.assertEqual(resposta.status_code, status.HTTP_403_FORBIDDEN)
+        assert resposta.status_code == status.HTTP_403_FORBIDDEN
 
     def test_exige_parametros_de_data(self):
         self.client.force_authenticate(user=self.admin)
         resposta = self.client.get('/api/pedidos/relatorio_vendas/')
-        self.assertEqual(resposta.status_code, status.HTTP_400_BAD_REQUEST)
+        assert resposta.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_data_invalida(self):
         self.client.force_authenticate(user=self.admin)
         resposta = self.client.get('/api/pedidos/relatorio_vendas/?data_inicio=31-12-2025&data_fim=hoje')
-        self.assertEqual(resposta.status_code, status.HTTP_400_BAD_REQUEST)
+        assert resposta.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_calcula_apenas_pedidos_retirados(self):
         self.client.force_authenticate(user=self.admin)
         resposta = self.client.get(f'/api/pedidos/relatorio_vendas/?data_inicio={self.hoje}&data_fim={self.hoje}')
 
-        self.assertEqual(resposta.status_code, status.HTTP_200_OK)
-        self.assertEqual(resposta.data['total_pedidos'], 1)
-        self.assertEqual(str(resposta.data['total_vendido']), '16.00')
-        self.assertEqual(str(resposta.data['ticket_medio']), '16.00')
+        assert resposta.status_code == status.HTTP_200_OK
+        assert resposta.data['total_pedidos'] == 1
+        assert str(resposta.data['total_vendido']) == '16.00'
+        assert str(resposta.data['ticket_medio']) == '16.00'
 
     def test_periodo_sem_vendas_nao_quebra(self):
         self.client.force_authenticate(user=self.admin)
         resposta = self.client.get('/api/pedidos/relatorio_vendas/?data_inicio=2020-01-01&data_fim=2020-01-31')
 
-        self.assertEqual(resposta.status_code, status.HTTP_200_OK)
-        self.assertEqual(resposta.data['total_pedidos'], 0)
-        self.assertEqual(str(resposta.data['total_vendido']), '0.00')
+        assert resposta.status_code == status.HTTP_200_OK
+        assert resposta.data['total_pedidos'] == 0
+        assert str(resposta.data['total_vendido']) == '0.00'
 
 
 class ProdutosMaisVendidosTestCase(CriaUsuariosEProdutosMixin, APITestCase):
     def setUp(self):
         self.criar_usuarios()
         self.criar_produtos()
+        self.quantidade_coxinha_vendida = 8
 
         pedido1 = Pedido.objects.create(usuario=self.aluno, status=Pedido.Status.RETIRADO)
         ItemPedido.objects.create(pedido=pedido1, produto=self.coxinha, quantidade=5, preco_unitario=8)
@@ -78,20 +78,20 @@ class ProdutosMaisVendidosTestCase(CriaUsuariosEProdutosMixin, APITestCase):
     def test_requer_admin(self):
         self.client.force_authenticate(user=self.aluno)
         resposta = self.client.get('/api/produtos/mais_vendidos/')
-        self.assertEqual(resposta.status_code, status.HTTP_403_FORBIDDEN)
+        assert resposta.status_code == status.HTTP_403_FORBIDDEN
 
     def test_ranking_correto_e_ordenado(self):
         self.client.force_authenticate(user=self.admin)
         resposta = self.client.get('/api/produtos/mais_vendidos/')
 
-        self.assertEqual(resposta.status_code, status.HTTP_200_OK)
+        assert resposta.status_code == status.HTTP_200_OK
         resultado = resposta.data['resultado']
-        self.assertEqual(resultado[0]['produto_nome'], 'Coxinha de frango')
-        self.assertEqual(resultado[0]['quantidade_vendida'], 8)  # 5 + 3, ignora o pedido cancelado
-        self.assertEqual(resultado[1]['produto_nome'], 'Suco de laranja')
-        self.assertEqual(resultado[1]['quantidade_vendida'], 1)
+        assert resultado[0]['produto_nome'] == 'Coxinha de frango'
+        assert resultado[0]['quantidade_vendida'] == self.quantidade_coxinha_vendida  # 5 + 3, ignora o pedido cancelado
+        assert resultado[1]['produto_nome'] == 'Suco de laranja'
+        assert resultado[1]['quantidade_vendida'] == 1
 
     def test_respeita_limite(self):
         self.client.force_authenticate(user=self.admin)
         resposta = self.client.get('/api/produtos/mais_vendidos/?limite=1')
-        self.assertEqual(len(resposta.data['resultado']), 1)
+        assert len(resposta.data['resultado']) == 1

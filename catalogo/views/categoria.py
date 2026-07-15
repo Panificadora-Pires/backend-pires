@@ -1,8 +1,8 @@
 from rest_framework.viewsets import ModelViewSet
 
 from catalogo.models import Categoria
-from core.permissions import IsAdminOrReadOnly
 from catalogo.serializers import CategoriaSerializer
+from core.permissions import IsAdminOrReadOnly
 
 
 class CategoriaViewSet(ModelViewSet):
