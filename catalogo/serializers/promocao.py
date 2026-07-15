@@ -20,6 +20,18 @@ class PromocaoSerializer(serializers.ModelSerializer):
 
         if data_inicio and data_fim and data_fim < data_inicio:
             raise serializers.ValidationError('A data de fim não pode ser anterior à data de início.')
+
+        if produto and data_inicio and data_fim:
+            conflitos = Promocao.objects.filter(produto=produto, data_inicio__lte=data_fim, data_fim__gte=data_inicio)
+            if self.instance:
+                conflitos = conflitos.exclude(pk=self.instance.pk)
+            conflito = conflitos.first()
+            if conflito:
+                raise serializers.ValidationError(
+                    'Já existe uma promoção para este produto no período de '
+                    f'{conflito.data_inicio.strftime("%d/%m/%Y")} a {conflito.data_fim.strftime("%d/%m/%Y")}.'
+                )
+
         if produto and preco_promocional is not None and preco_promocional >= produto.preco:
             raise serializers.ValidationError(
                 'O preço promocional deve ser menor que o preço original do produto.'
