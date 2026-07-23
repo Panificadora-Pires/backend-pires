@@ -48,9 +48,6 @@ CORS_ALLOW_CREDENTIALS = True
 # Regras de negócio do app pedidos
 # ============================================================
 
-# RN06 — tempo (em minutos) que um pedido pode ficar "pronto" sem ser
-# retirado antes de ser cancelado automaticamente pelo comando
-# `cancelar_pedidos_expirados`.
 PEDIDO_TEMPO_LIMITE_RETIRADA_MINUTOS = int(os.getenv('PEDIDO_TEMPO_LIMITE_RETIRADA_MINUTOS', '15'))
 
 # ============================================================
@@ -64,6 +61,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django.contrib.sites',
 
     # Terceiros
     'corsheaders',
@@ -71,6 +69,13 @@ INSTALLED_APPS = [
     'django_filters',
     'drf_spectacular',
     'rest_framework',
+    'rest_framework_simplejwt.token_blacklist',
+
+    # Social Auth (Removido dj_rest_auth para evitar bug de username)
+    'allauth',
+    'allauth.account',
+    'allauth.socialaccount',
+    'allauth.socialaccount.providers.google',
 
     # Aplicações do projeto
     'core',
@@ -91,6 +96,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'allauth.account.middleware.AccountMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -139,18 +145,10 @@ DATABASES = {
 # ============================================================
 
 AUTH_PASSWORD_VALIDATORS = [
-    {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
-    },
+    {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
 
 # ============================================================
@@ -167,18 +165,9 @@ USE_TZ = True
 # ============================================================
 
 STATIC_URL = '/static/'
-
-# ============================================================
-# Arquivos enviados pelos usuários
-# ============================================================
-
 MEDIA_ENDPOINT = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 FILE_UPLOAD_PERMISSIONS = 0o640
-
-# Durante o desenvolvimento o frontend precisa acessar
-# diretamente o servidor Django.
-
 MEDIA_URL = 'http://127.0.0.1:8000/media/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
@@ -187,22 +176,11 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 # ============================================================
 
 if CLOUDINARY_URL:
-    # Em produção, os arquivos enviados ficam armazenados
-    # no Cloudinary.
-
-    INSTALLED_APPS += [
-        'cloudinary',
-        'cloudinary_storage',
-    ]
-
+    INSTALLED_APPS += ['cloudinary', 'cloudinary_storage']
     MEDIA_URL = '/media/'
     STORAGES = {
-        'default': {
-            'BACKEND': 'cloudinary_storage.storage.MediaCloudinaryStorage',
-        },
-        'staticfiles': {
-            'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
-        },
+        'default': {'BACKEND': 'cloudinary_storage.storage.MediaCloudinaryStorage'},
+        'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage'},
     }
 
 # ============================================================
@@ -222,24 +200,11 @@ AUTH_USER_MODEL = 'core.User'
 # ============================================================
 
 REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
-    ),
-
-    'DEFAULT_PERMISSION_CLASSES': (
-        'rest_framework.permissions.DjangoModelPermissionsOrAnonReadOnly',
-    ),
-
-    'DEFAULT_FILTER_BACKENDS': (
-        'django_filters.rest_framework.DjangoFilterBackend',
-    ),
-
-    'DEFAULT_SCHEMA_CLASS':
-        'drf_spectacular.openapi.AutoSchema',
-
-    'DEFAULT_PAGINATION_CLASS':
-        'app.pagination.CustomPagination',
-
+    'DEFAULT_AUTHENTICATION_CLASSES': ('rest_framework_simplejwt.authentication.JWTAuthentication',),
+    'DEFAULT_PERMISSION_CLASSES': ('rest_framework.permissions.DjangoModelPermissionsOrAnonReadOnly',),
+    'DEFAULT_FILTER_BACKENDS': ('django_filters.rest_framework.DjangoFilterBackend',),
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    'DEFAULT_PAGINATION_CLASS': 'app.pagination.CustomPagination',
     'PAGE_SIZE': 10,
 }
 
@@ -248,8 +213,8 @@ REST_FRAMEWORK = {
 # ============================================================
 
 SPECTACULAR_SETTINGS = {
-    'TITLE': '<PROJETO> API',
-    'DESCRIPTION': 'API para o projeto <descreva aqui seu projeto>.',
+    'TITLE': 'Pires Panificadora API',
+    'DESCRIPTION': 'API para o sistema de pedidos da Pires Panificadora.',
     'VERSION': '1.0.0',
 }
 
@@ -264,6 +229,36 @@ SIMPLE_JWT = {
 }
 
 # ============================================================
+# Django Sites (Exigido pelo Allauth)
+# ============================================================
+SITE_ID = 1
+
+# ============================================================
+# Django Allauth (Social Auth)
+# ============================================================
+AUTHENTICATION_BACKENDS = [
+    'django.contrib.auth.backends.ModelBackend',
+    'allauth.account.auth_backends.AuthenticationBackend',
+]
+
+# CRUCIAL: Como nosso model User NÃO tem username, dizemos ao Allauth
+ACCOUNT_LOGIN_METHODS = {'email'}
+ACCOUNT_SIGNUP_FIELDS = ['email*', 'password1*', 'password2*']  # O * indica obrigatório, e não tem username
+ACCOUNT_EMAIL_VERIFICATION = 'none'
+
+SOCIALACCOUNT_PROVIDERS = {
+    'google': {
+        'APP': {
+            'client_id': os.getenv('GOOGLE_CLIENT_ID', ''),
+            'secret': os.getenv('GOOGLE_CLIENT_SECRET', ''),
+            'key': '',
+        },
+        'SCOPE': ['profile', 'email'],
+        'AUTH_PARAMS': {'access_type': 'online'},
+    }
+}
+
+# ============================================================
 # Informações de configuração (debug)
 # ============================================================
 
@@ -273,28 +268,18 @@ print('=' * 70)
 
 print(f'DEBUG....................: {DEBUG if DEBUG else "NÃO DEFINIDO"}')
 print(f'SECRET_KEY...............: {SECRET_KEY if SECRET_KEY else "NÃO DEFINIDA"}')
-
 print()
-
 print(f'DATABASE ENGINE.............: {DATABASES["default"]["ENGINE"]}')
 print(f'DATABASE NAME...............: {DATABASES["default"]["NAME"]}')
-
 print()
-
 print(f'FRONTEND_URLS ({len(FRONTEND_URLS)}).......: {FRONTEND_URLS}')
 print(f'CORS_ALLOWED_ORIGINS....: {CORS_ALLOWED_ORIGINS}')
 print(f'CSRF_TRUSTED_ORIGINS....: {CSRF_TRUSTED_ORIGINS}')
-
 print()
-
 print(f'MEDIA_URL...............: {MEDIA_URL}')
 print(f'MEDIA_ROOT..............: {MEDIA_ROOT}')
-
 print()
-
 print(f'CLOUDINARY..............: {"SIM" if CLOUDINARY_URL else "NÃO"}')
-
 if CLOUDINARY_URL:
     print(f'CLOUDINARY_URL..........: {CLOUDINARY_URL}')
-
 print('=' * 70)
