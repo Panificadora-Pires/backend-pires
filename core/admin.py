@@ -53,3 +53,11 @@ class UserAdmin(BaseUserAdmin):
 
 
 admin.site.register(models.User, UserAdmin)
+
+
+@admin.register(models.AdminInvite)
+class AdminInviteAdmin(admin.ModelAdmin):
+    list_display = ['email', 'created_by', 'created_at', 'expires_at', 'used']
+    list_filter = ['used']
+    search_fields = ['email']
+    readonly_fields = ['token', 'created_at', 'expires_at']
