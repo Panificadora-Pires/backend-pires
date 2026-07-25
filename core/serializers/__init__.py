@@ -1,7 +1,4 @@
-from .user import UserSerializer, UserRegistrationSerializer
+from .user import UserRegistrationSerializer, UserSerializer
 from .invite import AdminInviteCreateSerializer, AdminInviteRegistrationSerializer
 
-__all__ = [
-    'UserSerializer', 'UserRegistrationSerializer',
-    'AdminInviteCreateSerializer', 'AdminInviteRegistrationSerializer'
-]
+__all__ = ['UserRegistrationSerializer', 'UserSerializer', 'AdminInviteCreateSerializer', 'AdminInviteRegistrationSerializer']

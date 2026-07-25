@@ -1,9 +1,15 @@
-from .user import UserViewSet, UserRegistrationView
-from .social import CustomGoogleLoginView
+from .token import CustomTokenObtainPairView, CustomTokenRefreshView, CustomTokenVerifyView
+from .user import UserRegistrationView, UserViewSet
 from .invite import AdminInviteCreateView, AdminInviteRegistrationView
+from .social import CustomGoogleLoginView
 
-__all__ = [
-    'UserViewSet', 'UserRegistrationView',
+all = [
+    'CustomTokenObtainPairView',
+    'CustomTokenRefreshView',
+    'CustomTokenVerifyView',
+    'UserRegistrationView',
+    'UserViewSet',
+    'AdminInviteCreateView',
+    'AdminInviteRegistrationView',
     'CustomGoogleLoginView',
-    'AdminInviteCreateView', 'AdminInviteRegistrationView'
 ]

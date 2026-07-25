@@ -24,7 +24,7 @@ class AdminInviteCreateSerializer(serializers.ModelSerializer):
 class AdminInviteRegistrationSerializer(serializers.ModelSerializer):
     """Serializer para o convidado se registrar como Admin."""
     token = serializers.UUIDField(write_only=True)
-    password = serializers.CharField(write_only=True, min_length=6)
+    password = serializers.CharField(write_only=True, min_length=8)
 
     class Meta:
         model = User
