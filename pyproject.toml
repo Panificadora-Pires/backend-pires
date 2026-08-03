@@ -1,7 +1,7 @@
 [project]
-name = "livraria"
+name = "backend-pires"
 version = "1.0.0"
-description = "Uma API REST de uma livraria feita com Django e Django REST Framework."
+description = "Panificadora Pires - Backend"
 authors = [{ name = "Marco André Mendes", email = "marcoandre@gmail.com" }]
 dependencies = [
   'dj-database-url>=2.1.0',
@@ -22,9 +22,13 @@ dependencies = [
   'python-dotenv>=1.0.0',
   'python-magic-bin>=0.4.14; sys_platform == "win32"',
   'python-magic>=0.4.27; sys_platform == "linux"',
+  'qrcode>=7.4.2',
   'setuptools>=68.2.2',
   'uvicorn>=0.29.0',
   'whitenoise[brotli]>=6.6.0',
+  "google-auth>=2.35.0",
+  "cryptography>=43.0.0",
+  "requests>=2.32.0",
 ]
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -40,6 +44,7 @@ dev = [
 dev = "python manage.py runserver 127.0.0.1:8000"
 createsuperuser = "python manage.py createsuperuser"
 pre_migrate = "python manage.py makemigrations"
+seed_dados = "python manage.py seed_dados"
 migrate = "python manage.py migrate"
 post_migrate = "python manage.py graph_models -S -g -o core.png core"
 shell = "python manage.py shell"
