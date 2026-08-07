@@ -1,25 +1,64 @@
 """
-Django admin customization.
+Personalização do Django Admin.
 """
 
 from django.contrib import admin
-from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from django.contrib.auth.admin import (
+    UserAdmin as BaseUserAdmin,
+)
 from django.utils.translation import gettext_lazy as _
 
 from core import models
 
 
+@admin.register(models.User)
 class UserAdmin(BaseUserAdmin):
-    """Define the admin pages for users."""
+    """Configuração dos usuários no Django Admin."""
 
     ordering = ('id',)
-    list_display = ('email', 'name')
-    search_fields = ('email', 'name', 'groups__name')
+
+    list_display = (
+        'email',
+        'name',
+        'is_active',
+        'is_staff',
+        'possui_google',
+    )
+
+    list_filter = (
+        'is_active',
+        'is_staff',
+        'is_superuser',
+    )
+
+    search_fields = (
+        'email',
+        'name',
+        'google_sub',
+        'groups__name',
+    )
+
     fieldsets = (
-        (None, {'fields': ('email', 'password')}),
-        (_('Personal Info'), {'fields': ('name',)}),
         (
-            _('Permissions'),
+            None,
+            {
+                'fields': (
+                    'email',
+                    'password',
+                )
+            },
+        ),
+        (
+            _('Informações pessoais'),
+            {
+                'fields': (
+                    'name',
+                    'google_sub',
+                )
+            },
+        ),
+        (
+            _('Permissões'),
             {
                 'fields': (
                     'is_active',
@@ -28,11 +67,37 @@ class UserAdmin(BaseUserAdmin):
                 )
             },
         ),
-        (_('Important dates'), {'fields': ('last_login',)}),
-        (_('Groups'), {'fields': ('groups',)}),
-        (_('User Permissions'), {'fields': ('user_permissions',)}),
+        (
+            _('Datas importantes'),
+            {
+                'fields': (
+                    'last_login',
+                )
+            },
+        ),
+        (
+            _('Grupos'),
+            {
+                'fields': (
+                    'groups',
+                )
+            },
+        ),
+        (
+            _('Permissões individuais'),
+            {
+                'fields': (
+                    'user_permissions',
+                )
+            },
+        ),
     )
-    readonly_fields = ['last_login']
+
+    readonly_fields = (
+        'last_login',
+        'google_sub',
+    )
+
     add_fieldsets = (
         (
             None,
@@ -51,13 +116,34 @@ class UserAdmin(BaseUserAdmin):
         ),
     )
 
-
-admin.site.register(models.User, UserAdmin)
+    @admin.display(
+        boolean=True,
+        description='Conta Google',
+    )
+    def possui_google(self, obj):
+        return bool(obj.google_sub)
 
 
 @admin.register(models.AdminInvite)
 class AdminInviteAdmin(admin.ModelAdmin):
-    list_display = ['email', 'created_by', 'created_at', 'expires_at', 'used']
-    list_filter = ['used']
-    search_fields = ['email']
-    readonly_fields = ['token', 'created_at', 'expires_at']
+    list_display = (
+        'email',
+        'created_by',
+        'created_at',
+        'expires_at',
+        'used',
+    )
+
+    list_filter = (
+        'used',
+    )
+
+    search_fields = (
+        'email',
+    )
+
+    readonly_fields = (
+        'token',
+        'created_at',
+        'expires_at',
+    )
