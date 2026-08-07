@@ -160,6 +160,43 @@ EMAIL_TIMEOUT = int(
 )
 
 
+VERIFICATION_CODE_TTL_MINUTES = int(
+    os.getenv(
+        'VERIFICATION_CODE_TTL_MINUTES',
+        '10',
+    )
+)
+
+VERIFICATION_MAX_ATTEMPTS = int(
+    os.getenv(
+        'VERIFICATION_MAX_ATTEMPTS',
+        '5',
+    )
+)
+
+VERIFICATION_RESEND_COOLDOWN_SECONDS = int(
+    os.getenv(
+        'VERIFICATION_RESEND_COOLDOWN_SECONDS',
+        '60',
+    )
+)
+
+if VERIFICATION_CODE_TTL_MINUTES < 1:
+    raise RuntimeError(
+        'VERIFICATION_CODE_TTL_MINUTES deve ser maior que zero.'
+    )
+
+if VERIFICATION_MAX_ATTEMPTS < 1:
+    raise RuntimeError(
+        'VERIFICATION_MAX_ATTEMPTS deve ser maior que zero.'
+    )
+
+if VERIFICATION_RESEND_COOLDOWN_SECONDS < 1:
+    raise RuntimeError(
+        'VERIFICATION_RESEND_COOLDOWN_SECONDS deve ser maior que zero.'
+    )
+
+
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -354,6 +391,15 @@ REST_FRAMEWORK = {
         'app.pagination.CustomPagination'
     ),
     'PAGE_SIZE': 10,
+    'DEFAULT_THROTTLE_RATES': {
+        'login': '60/hour',
+        'logout': '60/hour',
+        'google_login': '60/hour',
+        'registration': '20/hour',
+        'verification_send': '20/hour',
+        'verification_confirm': '60/hour',
+        'password_reset': '20/hour',
+    },
 }
 
 
@@ -369,6 +415,8 @@ SPECTACULAR_SETTINGS = {
 
 
 SIMPLE_JWT = {
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
     'ACCESS_TOKEN_LIFETIME': timedelta(
         hours=3,
     ),
@@ -378,6 +426,8 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': (
         'Bearer',
     ),
+    # Invalida tokens emitidos antes de uma troca de senha.
+    'CHECK_REVOKE_TOKEN': True,
 }
 
 
