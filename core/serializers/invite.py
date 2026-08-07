@@ -223,6 +223,7 @@ class AdminInviteRegistrationSerializer(
                     password=password,
                     is_staff=True,
                     is_active=True,
+                    email_verified=True,
                 )
 
                 invite.used = True

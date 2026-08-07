@@ -1,6 +1,4 @@
-"""
-Modelo de usuário personalizado do sistema.
-"""
+"""Modelo de usuário personalizado do sistema."""
 
 from django.contrib.auth.models import (
     AbstractBaseUser,
@@ -17,7 +15,7 @@ class UserManager(BaseUserManager):
     use_in_migrations = True
 
     def create_user(self, email, password=None, **extra_fields):
-        """Cria e salva um usuário comum."""
+        """Cria e salva um usuário."""
 
         if not email:
             raise ValueError(
@@ -51,6 +49,7 @@ class UserManager(BaseUserManager):
         extra_fields.setdefault('is_staff', True)
         extra_fields.setdefault('is_superuser', True)
         extra_fields.setdefault('is_active', True)
+        extra_fields.setdefault('email_verified', True)
 
         if extra_fields.get('is_staff') is not True:
             raise ValueError(
@@ -61,6 +60,12 @@ class UserManager(BaseUserManager):
             raise ValueError(
                 'Um superusuário precisa possuir '
                 'is_superuser=True.'
+            )
+
+        if extra_fields.get('email_verified') is not True:
+            raise ValueError(
+                'Um superusuário precisa possuir '
+                'email_verified=True.'
             )
 
         if not password:
@@ -93,6 +98,18 @@ class User(AbstractBaseUser, PermissionsMixin):
         help_text=_('Nome completo do usuário.'),
     )
 
+    phone = models.CharField(
+        max_length=20,
+        unique=True,
+        blank=True,
+        null=True,
+        verbose_name=_('Telefone'),
+        help_text=_(
+            'Telefone normalizado no formato internacional, '
+            'por exemplo +5547999999999.'
+        ),
+    )
+
     google_sub = models.CharField(
         max_length=255,
         unique=True,
@@ -102,6 +119,15 @@ class User(AbstractBaseUser, PermissionsMixin):
         help_text=_(
             'Identificador permanente da conta Google '
             'utilizado no login social.'
+        ),
+    )
+
+    email_verified = models.BooleanField(
+        default=False,
+        verbose_name=_('E-mail verificado'),
+        help_text=_(
+            'Indica se o usuário comprovou o controle '
+            'do endereço de e-mail.'
         ),
     )
 
