@@ -8,7 +8,7 @@ from rest_framework.permissions import (
     IsAuthenticated,
 )
 from rest_framework.response import Response
-from rest_framework.viewsets import ModelViewSet
+from rest_framework.viewsets import ReadOnlyModelViewSet
 
 from core.models import User
 from core.serializers import (
@@ -17,12 +17,14 @@ from core.serializers import (
 )
 
 
-class UserViewSet(ModelViewSet):
+class UserViewSet(ReadOnlyModelViewSet):
     """
-    Administração dos usuários.
+    Consulta de usuários.
 
-    Usuários comuns podem acessar apenas /usuarios/me/.
-    As demais operações exigem um administrador.
+    Usuários comuns acessam somente /usuarios/me/.
+    Administradores podem listar e consultar usuários.
+
+    Criação, alteração e exclusão ficam no Django Admin.
     """
 
     queryset = User.objects.all().order_by('id')
@@ -72,7 +74,7 @@ class UserViewSet(ModelViewSet):
 @extend_schema(
     summary='Registro de novo usuário',
     description=(
-        'Cria um novo usuário no sistema. '
+        'Cria um novo usuário comum no sistema. '
         'Não requer autenticação.'
     ),
     request=UserRegistrationSerializer,

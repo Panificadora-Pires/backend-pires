@@ -113,7 +113,11 @@ GOOGLE_CLIENT_ID = os.getenv(
 
 EMAIL_BACKEND = os.getenv(
     'EMAIL_BACKEND',
-    'django.core.mail.backends.console.EmailBackend',
+    (
+        'django.core.mail.backends.console.EmailBackend'
+        if DEBUG
+        else 'django.core.mail.backends.smtp.EmailBackend'
+    ),
 )
 
 DEFAULT_FROM_EMAIL = os.getenv(
