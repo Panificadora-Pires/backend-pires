@@ -109,7 +109,12 @@ GOOGLE_CLIENT_ID = os.getenv(
     'GOOGLE_CLIENT_ID',
     '',
 ).strip()
-
+GOOGLE_TOKEN_CLOCK_SKEW_SECONDS = int(
+    os.getenv(
+        'GOOGLE_TOKEN_CLOCK_SKEW_SECONDS',
+        '10',
+    )
+)
 
 EMAIL_BACKEND = os.getenv(
     'EMAIL_BACKEND',
