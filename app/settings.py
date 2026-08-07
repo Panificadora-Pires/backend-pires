@@ -391,6 +391,7 @@ SIMPLE_JWT = {
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
+
     'formatters': {
         'verbose': {
             'format': (
@@ -399,31 +400,36 @@ LOGGING = {
             ),
             'style': '{',
         },
-        'simple': {
-            'format': (
-                '{levelname} {message}'
-            ),
-            'style': '{',
-        },
     },
+
     'handlers': {
         'console': {
             'class': 'logging.StreamHandler',
             'formatter': 'verbose',
         },
     },
+
     'root': {
         'handlers': ['console'],
         'level': 'INFO',
     },
+
     'loggers': {
         'django': {
             'handlers': ['console'],
-            'level': (
-                'DEBUG'
-                if DEBUG
-                else 'INFO'
-            ),
+            'level': 'INFO',
+            'propagate': False,
+        },
+
+        'django.utils.autoreload': {
+            'handlers': ['console'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+
+        'django.db.backends': {
+            'handlers': ['console'],
+            'level': 'WARNING',
             'propagate': False,
         },
     },
