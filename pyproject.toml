@@ -50,11 +50,11 @@ post_migrate = "python manage.py graph_models -S -g -o core.png core"
 shell = "python manage.py shell"
 shellp = "python manage.py shell_plus"
 test = "python manage.py test"
+django_check = "python manage.py check"
 loaddata = "python manage.py loaddata core.json"
 dumpdata = "python manage.py dumpdata --indent 2"
 cria_api = "python ./scripts/cria_api.py {args}"
-check = "ruff check"
-pre_format = "ruff check --fix"
+lint = "ruff check ."
 format = "ruff format"
 
 [tool.pdm]

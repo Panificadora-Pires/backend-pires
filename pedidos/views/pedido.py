@@ -1,133 +1,266 @@
 from datetime import date
 from decimal import Decimal
 
+from django.db import transaction
 from django.db.models import F, Sum
-from drf_spectacular.utils import OpenApiParameter, extend_schema
+from django.shortcuts import get_object_or_404
+from drf_spectacular.utils import (
+    OpenApiParameter,
+    extend_schema,
+)
 from rest_framework import status as http_status
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.mixins import (
+    CreateModelMixin,
+    ListModelMixin,
+    RetrieveModelMixin,
+)
+from rest_framework.permissions import (
+    IsAdminUser,
+    IsAuthenticated,
+)
 from rest_framework.response import Response
-from rest_framework.viewsets import ModelViewSet
+from rest_framework.viewsets import GenericViewSet
 
 from core.permissions import IsOwnerOrAdmin
 from pedidos.models import ItemPedido, Pedido
-from pedidos.serializers import PedidoSerializer, PedidoStatusUpdateSerializer, RetiradaPorQRCodeSerializer
+from pedidos.serializers import (
+    PedidoSerializer,
+    PedidoStatusUpdateSerializer,
+    RetiradaPorQRCodeSerializer,
+)
 from pedidos.utils import gerar_qrcode_base64
 
 
-class PedidoViewSet(ModelViewSet):
-    """RF04 — criação de pedido / RF07 — gestão de status / RF10 — acompanhamento."""
+class PedidoViewSet(
+    CreateModelMixin,
+    ListModelMixin,
+    RetrieveModelMixin,
+    GenericViewSet,
+):
+    """
+    Criação e consulta de pedidos.
+
+    Alterações de status são feitas somente pelas ações
+    específicas, seguindo as regras de negócio.
+    """
 
     serializer_class = PedidoSerializer
-    permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
-    filterset_fields = ['status']
+    permission_classes = [
+        IsAuthenticated,
+        IsOwnerOrAdmin,
+    ]
+    filterset_fields = [
+        'status',
+    ]
 
     def get_queryset(self):
-        """Aluno só vê os próprios pedidos; administração vê todos (RF10)."""
         usuario = self.request.user
-        queryset = Pedido.objects.all().prefetch_related('itens__produto').order_by('-data')
+
+        queryset = (
+            Pedido.objects
+            .select_related('usuario')
+            .prefetch_related(
+                'itens__produto',
+            )
+            .order_by('-data')
+        )
+
         if usuario.is_staff:
             return queryset
-        return queryset.filter(usuario=usuario)
 
-    def perform_create(self, serializer):
-        serializer.save(usuario=self.request.user)
+        return queryset.filter(
+            usuario=usuario,
+        )
 
     @extend_schema(
         summary='Alterar status do pedido',
-        description='Avança o status do pedido seguindo a RN04. Apenas a administração pode chamar.',
+        description=(
+            'Altera o status seguindo as transições da RN04. '
+            'Disponível somente para administradores.'
+        ),
         request=PedidoStatusUpdateSerializer,
-        responses={200: PedidoSerializer, 400: None, 403: None},
+        responses={
+            200: PedidoSerializer,
+            400: None,
+            403: None,
+            404: None,
+        },
     )
-    @action(detail=True, methods=['patch'], permission_classes=[IsAuthenticated])
+    @action(
+        detail=True,
+        methods=['patch'],
+        permission_classes=[IsAdminUser],
+    )
     def alterar_status(self, request, pk=None):
-        if not request.user.is_staff:
-            return Response(
-                {'detail': 'Apenas a administração pode alterar o status do pedido.'},
-                status=http_status.HTTP_403_FORBIDDEN,
+        with transaction.atomic():
+            queryset = (
+                self.filter_queryset(
+                    self.get_queryset()
+                )
+                .select_for_update()
             )
 
-        pedido = self.get_object()
-        serializer = PedidoStatusUpdateSerializer(pedido, data=request.data, partial=True)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
+            pedido = get_object_or_404(
+                queryset,
+                pk=pk,
+            )
 
-        return Response(PedidoSerializer(pedido).data, status=http_status.HTTP_200_OK)
+            serializer = PedidoStatusUpdateSerializer(
+                pedido,
+                data=request.data,
+                partial=True,
+            )
+            serializer.is_valid(
+                raise_exception=True,
+            )
+            serializer.save()
+
+        return Response(
+            self.get_serializer(pedido).data,
+            status=http_status.HTTP_200_OK,
+        )
 
     @extend_schema(
-        summary='Obter QR Code de retirada do pedido',
-        description='Retorna o QR Code (PNG em base64) que o aluno mostra no balcão para retirar o pedido.',
-        responses={200: None},
+        summary='Obter QR Code de retirada',
+        description=(
+            'Retorna o QR Code que o aluno apresenta '
+            'no balcão para retirar o pedido.'
+        ),
+        responses={
+            200: None,
+            404: None,
+        },
     )
-    @action(detail=True, methods=['get'])
+    @action(
+        detail=True,
+        methods=['get'],
+    )
     def qrcode(self, request, pk=None):
         pedido = self.get_object()
-        conteudo = str(pedido.codigo_retirada)
+        conteudo = str(
+            pedido.codigo_retirada,
+        )
+
         return Response(
             {
                 'codigo_retirada': conteudo,
-                'qrcode_base64': gerar_qrcode_base64(conteudo),
+                'qrcode_base64': gerar_qrcode_base64(
+                    conteudo
+                ),
             }
         )
 
     @extend_schema(
         summary='Retirar pedido via QR Code',
         description=(
-            'Usado pela administração no balcão: lê o QR Code do aluno e, se o pedido '
-            'estiver "pronto", muda o status para "retirado".'
+            'Confirma a retirada de um pedido pronto. '
+            'Disponível somente para administradores.'
         ),
         request=RetiradaPorQRCodeSerializer,
-        responses={200: PedidoSerializer, 400: None, 403: None},
+        responses={
+            200: PedidoSerializer,
+            400: None,
+            403: None,
+        },
     )
-    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
+    @action(
+        detail=False,
+        methods=['post'],
+        permission_classes=[IsAdminUser],
+    )
     def retirar_via_qrcode(self, request):
-        if not request.user.is_staff:
-            return Response(
-                {'detail': 'Apenas a administração pode confirmar retiradas.'},
-                status=http_status.HTTP_403_FORBIDDEN,
-            )
+        serializer = RetiradaPorQRCodeSerializer(
+            data=request.data,
+        )
+        serializer.is_valid(
+            raise_exception=True,
+        )
 
-        serializer = RetiradaPorQRCodeSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
         pedido = serializer.save()
 
-        return Response(PedidoSerializer(pedido).data, status=http_status.HTTP_200_OK)
+        return Response(
+            self.get_serializer(pedido).data,
+            status=http_status.HTTP_200_OK,
+        )
 
     @extend_schema(
-        summary='Relatório de vendas por período (RF11)',
+        summary='Relatório de vendas por período',
         description=(
-            'Soma as vendas de pedidos com status "retirado" dentro do período informado. '
-            'Apenas pedidos efetivamente retirados contam como venda concluída.'
+            'Soma pedidos retirados dentro do período. '
+            'Somente pedidos efetivamente retirados '
+            'são considerados vendas.'
         ),
         parameters=[
-            OpenApiParameter('data_inicio', str, description='Data inicial (formato YYYY-MM-DD)', required=True),
-            OpenApiParameter('data_fim', str, description='Data final (formato YYYY-MM-DD)', required=True),
+            OpenApiParameter(
+                'data_inicio',
+                str,
+                description='Data inicial no formato YYYY-MM-DD',
+                required=True,
+            ),
+            OpenApiParameter(
+                'data_fim',
+                str,
+                description='Data final no formato YYYY-MM-DD',
+                required=True,
+            ),
         ],
-        responses={200: None, 400: None, 403: None},
+        responses={
+            200: None,
+            400: None,
+            403: None,
+        },
     )
-    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    @action(
+        detail=False,
+        methods=['get'],
+        permission_classes=[IsAdminUser],
+    )
     def relatorio_vendas(self, request):
-        if not request.user.is_staff:
-            return Response(
-                {'detail': 'Apenas a administração pode acessar relatórios.'},
-                status=http_status.HTTP_403_FORBIDDEN,
-            )
-
-        data_inicio_str = request.query_params.get('data_inicio')
-        data_fim_str = request.query_params.get('data_fim')
+        data_inicio_str = request.query_params.get(
+            'data_inicio'
+        )
+        data_fim_str = request.query_params.get(
+            'data_fim'
+        )
 
         if not data_inicio_str or not data_fim_str:
             return Response(
-                {'detail': 'Informe data_inicio e data_fim (formato YYYY-MM-DD).'},
+                {
+                    'detail': (
+                        'Informe data_inicio e data_fim '
+                        'no formato YYYY-MM-DD.'
+                    )
+                },
                 status=http_status.HTTP_400_BAD_REQUEST,
             )
 
         try:
-            data_inicio = date.fromisoformat(data_inicio_str)
-            data_fim = date.fromisoformat(data_fim_str)
+            data_inicio = date.fromisoformat(
+                data_inicio_str
+            )
+            data_fim = date.fromisoformat(
+                data_fim_str
+            )
         except ValueError:
             return Response(
-                {'detail': 'Datas em formato inválido. Use YYYY-MM-DD.'},
+                {
+                    'detail': (
+                        'Datas em formato inválido. '
+                        'Use YYYY-MM-DD.'
+                    )
+                },
+                status=http_status.HTTP_400_BAD_REQUEST,
+            )
+
+        if data_inicio > data_fim:
+            return Response(
+                {
+                    'detail': (
+                        'data_inicio não pode ser posterior '
+                        'a data_fim.'
+                    )
+                },
                 status=http_status.HTTP_400_BAD_REQUEST,
             )
 
@@ -139,19 +272,42 @@ class PedidoViewSet(ModelViewSet):
 
         total_pedidos = pedidos_periodo.count()
 
-        agregado = ItemPedido.objects.filter(pedido__in=pedidos_periodo).aggregate(
-            total_vendido=Sum(F('preco_unitario') * F('quantidade'))
+        agregado = ItemPedido.objects.filter(
+            pedido__in=pedidos_periodo,
+        ).aggregate(
+            total_vendido=Sum(
+                F('preco_unitario')
+                * F('quantidade')
+            )
         )
-        total_vendido = agregado['total_vendido'] or Decimal('0.00')
-        ticket_medio = (total_vendido / total_pedidos) if total_pedidos else Decimal('0.00')
+
+        total_vendido = (
+            agregado['total_vendido']
+            or Decimal('0.00')
+        )
+
+        ticket_medio = (
+            total_vendido / total_pedidos
+            if total_pedidos
+            else Decimal('0.00')
+        )
 
         return Response(
             {
-                'criterio': 'Considera apenas pedidos com status "retirado" dentro do período informado.',
+                'criterio': (
+                    'Considera apenas pedidos retirados '
+                    'dentro do período informado.'
+                ),
                 'data_inicio': data_inicio,
                 'data_fim': data_fim,
                 'total_pedidos': total_pedidos,
-                'total_vendido': round(total_vendido, 2),
-                'ticket_medio': round(ticket_medio, 2),
+                'total_vendido': round(
+                    total_vendido,
+                    2,
+                ),
+                'ticket_medio': round(
+                    ticket_medio,
+                    2,
+                ),
             }
         )
