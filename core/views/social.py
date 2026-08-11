@@ -83,17 +83,22 @@ class CustomGoogleLoginView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
+        credential = serializer.validated_data.get('credential')
+
         try:
             info = id_token.verify_oauth2_token(
-                serializer.validated_data['credential'],
+                credential,
                 google_requests.Request(),
                 settings.GOOGLE_CLIENT_ID,
+                clock_skew_in_seconds=settings.GOOGLE_TOKEN_CLOCK_SKEW_SECONDS,
             )
         except ValueError:
             return Response(
-                {'error': 'Token do Google inválido ou expirado.'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            {
+                'error': 'Token do Google inválido ou expirado.',
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
         except GoogleAuthError:
             return Response(
                 {
