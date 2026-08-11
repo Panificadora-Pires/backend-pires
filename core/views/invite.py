@@ -1,60 +1,146 @@
+import logging
+import smtplib
+
 from django.conf import settings
 from django.core.mail import send_mail
+from django.db import transaction
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
-from rest_framework.permissions import AllowAny, IsAdminUser
+from rest_framework.permissions import (
+    AllowAny,
+    IsAdminUser,
+)
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from core.serializers.invite import AdminInviteCreateSerializer, AdminInviteRegistrationSerializer
+from core.serializers.invite import (
+    AdminInviteCreateSerializer,
+    AdminInviteRegistrationSerializer,
+)
+
+logger = logging.getLogger(__name__)
 
 
 class AdminInviteCreateView(APIView):
-    """Endpoint para Admins criarem convites para outros Admins."""
+    """Criação de convites para administradores."""
 
-    permission_classes = [IsAdminUser]
+    permission_classes = [
+        IsAdminUser,
+    ]
 
-    @extend_schema(request=AdminInviteCreateSerializer, responses={201: AdminInviteCreateSerializer})
+    @extend_schema(
+        request=AdminInviteCreateSerializer,
+        responses={
+            201: AdminInviteCreateSerializer,
+            400: None,
+            401: None,
+            403: None,
+            503: None,
+        },
+    )
     def post(self, request):
-        serializer = AdminInviteCreateSerializer(data=request.data, context={'request': request})
-        serializer.is_valid(raise_exception=True)
-        invite = serializer.save()
-        token_str = str(invite.token)
-
-        # fail_silently=True porque, sem EMAIL_BACKEND real configurado em
-        # produção, isso não deve derrubar a criação do convite — o admin
-        # só não vai conseguir avisar o convidado por e-mail nesse caso.
-        send_mail(
-            subject='Convite - Pires Panificadora Admin',
-            message=f'Você foi convidado a ser administrador! Use este token para se registrar: {token_str}',
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[invite.email],
-            fail_silently=True,
+        serializer = AdminInviteCreateSerializer(
+            data=request.data,
+            context={
+                'request': request,
+            },
+        )
+        serializer.is_valid(
+            raise_exception=True,
         )
 
-        payload = {'message': 'Convite criado com sucesso. Um e-mail foi enviado ao convidado.', 'email': invite.email}
+        try:  # ruff: ignore[too-many-statements-in-try-clause]
+            with transaction.atomic():
+                invite = serializer.save()
+                token_str = str(invite.token)
 
-        # O token só entra na resposta em DEBUG (ambiente local), pra
-        # facilitar teste sem precisar configurar e-mail de verdade. Em
-        # produção ele NUNCA deve trafegar em uma resposta de API — quem
-        # o recebe é o convidado, por e-mail, e mais ninguém.
+                quantidade_enviada = send_mail(
+                    subject=(
+                        'Convite - Pires Panificadora Admin'
+                    ),
+                    message=(
+                        'Você foi convidado para ser '
+                        'administrador da Pires Panificadora.\n\n'
+                        f'Token de cadastro: {token_str}\n\n'
+                        'Este convite expira em 48 horas.'
+                    ),
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    recipient_list=[
+                        invite.email,
+                    ],
+                    fail_silently=False,
+                )
+
+                if quantidade_enviada != 1:
+                    raise OSError(
+                        'O backend de e-mail não confirmou '
+                        'o envio da mensagem.'
+                    )
+
+        except (
+            smtplib.SMTPException,
+            OSError,
+        ):
+            logger.exception(
+                'Falha ao enviar convite administrativo.'
+            )
+
+            return Response(
+                {
+                    'error': (
+                        'Não foi possível enviar o convite '
+                        'por e-mail. Tente novamente.'
+                    )
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        payload = {
+            'message': (
+                'Convite criado e enviado com sucesso.'
+            ),
+            'email': invite.email,
+        }
+
         if settings.DEBUG:
             payload['token'] = token_str
 
-        return Response(payload, status=status.HTTP_201_CREATED)
+        return Response(
+            payload,
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class AdminInviteRegistrationView(APIView):
-    """Endpoint público para o convidado se registrar usando o token."""
+    """Cadastro público utilizando um convite válido."""
 
-    permission_classes = [AllowAny]
+    permission_classes = [
+        AllowAny,
+    ]
 
-    @extend_schema(request=AdminInviteRegistrationSerializer, responses={201: None})
+    @extend_schema(
+        request=AdminInviteRegistrationSerializer,
+        responses={
+            201: None,
+            400: None,
+        },
+    )
     def post(self, request):
-        serializer = AdminInviteRegistrationSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+        serializer = AdminInviteRegistrationSerializer(
+            data=request.data,
+        )
+        serializer.is_valid(
+            raise_exception=True,
+        )
+
         user = serializer.save()
+
         return Response(
-            {'message': 'Administrador registrado com sucesso.', 'email': user.email},
+            {
+                'message': (
+                    'Administrador registrado com sucesso.'
+                ),
+                'email': user.email,
+            },
             status=status.HTTP_201_CREATED,
         )
