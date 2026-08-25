@@ -5,8 +5,11 @@ from django.contrib.auth.models import (
     BaseUserManager,
     PermissionsMixin,
 )
+from django.core.validators import FileExtensionValidator
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+
+from core.validators import validar_tamanho_avatar
 
 
 class UserManager(BaseUserManager):
@@ -107,6 +110,27 @@ class User(AbstractBaseUser, PermissionsMixin):
         help_text=_(
             'Telefone normalizado no formato internacional, '
             'por exemplo +5547999999999.'
+        ),
+    )
+
+    avatar = models.ImageField(
+        upload_to='usuarios/avatars/%Y/%m/',
+        blank=True,
+        null=True,
+        verbose_name=_('Foto de perfil'),
+        validators=[
+            FileExtensionValidator(
+                allowed_extensions=[
+                    'jpg',
+                    'jpeg',
+                    'png',
+                    'webp',
+                ]
+            ),
+            validar_tamanho_avatar,
+        ],
+        help_text=_(
+            'Imagem JPG, PNG ou WebP com no máximo 3 MB.'
         ),
     )
 

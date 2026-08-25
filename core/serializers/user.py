@@ -2,10 +2,18 @@ import re
 
 from django.contrib.auth import password_validation
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from rest_framework import serializers
 
 from core.models import User
+from core.validators import MAX_AVATAR_SIZE_BYTES
+
+
+ALLOWED_AVATAR_CONTENT_TYPES = {
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+}
 
 
 def normalize_brazilian_phone(value):
@@ -33,13 +41,15 @@ def normalize_brazilian_phone(value):
 
 
 class UserSerializer(serializers.ModelSerializer):
-    """Dados do usuário autenticado ou consultado pela administração."""
+    """Dados públicos do usuário autenticado ou consultado pela administração."""
 
     groups = serializers.SlugRelatedField(
         many=True,
         read_only=True,
         slug_field='name',
     )
+    google_connected = serializers.SerializerMethodField()
+    has_usable_password = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -48,7 +58,10 @@ class UserSerializer(serializers.ModelSerializer):
             'email',
             'name',
             'phone',
+            'avatar',
             'email_verified',
+            'google_connected',
+            'has_usable_password',
             'is_active',
             'is_staff',
             'is_superuser',
@@ -56,6 +69,129 @@ class UserSerializer(serializers.ModelSerializer):
             'groups',
         ]
         read_only_fields = fields
+
+    def get_google_connected(self, obj):
+        return bool(obj.google_sub)
+
+    def get_has_usable_password(self, obj):
+        return obj.has_usable_password()
+
+
+class UserProfileUpdateSerializer(serializers.ModelSerializer):
+    """Edição segura dos dados pessoais do próprio usuário."""
+
+    name = serializers.CharField(
+        max_length=255,
+        required=False,
+        allow_blank=False,
+        trim_whitespace=True,
+    )
+    phone = serializers.CharField(
+        max_length=20,
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+    )
+    avatar = serializers.ImageField(
+        required=False,
+        allow_null=True,
+    )
+    remove_avatar = serializers.BooleanField(
+        write_only=True,
+        required=False,
+        default=False,
+    )
+
+    class Meta:
+        model = User
+        fields = [
+            'name',
+            'phone',
+            'avatar',
+            'remove_avatar',
+        ]
+
+    def validate_phone(self, value):
+        if value in {'', None}:
+            return None
+
+        phone = normalize_brazilian_phone(value)
+
+        queryset = User.objects.filter(phone=phone)
+
+        if self.instance:
+            queryset = queryset.exclude(pk=self.instance.pk)
+
+        if queryset.exists():
+            raise serializers.ValidationError(
+                'Já existe um usuário com este telefone.'
+            )
+
+        return phone
+
+    def validate_avatar(self, value):
+        if value is None:
+            return value
+
+        if value.size > MAX_AVATAR_SIZE_BYTES:
+            raise serializers.ValidationError(
+                'A foto de perfil deve ter no máximo 3 MB.'
+            )
+
+        content_type = getattr(value, 'content_type', None)
+
+        if content_type and content_type not in ALLOWED_AVATAR_CONTENT_TYPES:
+            raise serializers.ValidationError(
+                'Envie uma imagem JPG, PNG ou WebP.'
+            )
+
+        return value
+
+    def validate(self, attrs):
+        if attrs.get('remove_avatar') and attrs.get('avatar') is not None:
+            raise serializers.ValidationError(
+                {
+                    'avatar': (
+                        'Escolha uma nova foto ou remova a atual, '
+                        'não as duas opções ao mesmo tempo.'
+                    )
+                }
+            )
+
+        return attrs
+
+    def update(self, instance, validated_data):
+        remove_avatar = validated_data.pop('remove_avatar', False)
+        avatar_enviado = 'avatar' in validated_data
+
+        avatar_antigo_nome = None
+        avatar_antigo_storage = None
+
+        if instance.avatar:
+            avatar_antigo_nome = instance.avatar.name
+            avatar_antigo_storage = instance.avatar.storage
+
+        if remove_avatar:
+            validated_data['avatar'] = None
+            avatar_enviado = True
+
+        instance = super().update(instance, validated_data)
+
+        if avatar_enviado and avatar_antigo_nome:
+            avatar_novo_nome = (
+                instance.avatar.name
+                if instance.avatar
+                else None
+            )
+
+            if avatar_novo_nome != avatar_antigo_nome:
+                transaction.on_commit(
+                    lambda: avatar_antigo_storage.delete(
+                        avatar_antigo_nome
+                    )
+                )
+
+        return instance
 
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
