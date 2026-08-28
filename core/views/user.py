@@ -5,6 +5,7 @@ from django.conf import settings
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.decorators import action
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import (
     AllowAny,
     IsAdminUser,
@@ -20,6 +21,7 @@ from core.serializers import (
     UserRegistrationSerializer,
     UserSerializer,
 )
+from core.serializers.user import UserProfileUpdateSerializer
 from core.services import (
     issue_challenge,
     invalidate_challenge,
@@ -52,25 +54,47 @@ class UserViewSet(ReadOnlyModelViewSet):
         ]
 
     @extend_schema(
-        summary='Dados do usuário autenticado',
-        description='Retorna os dados do usuário autenticado.',
+        summary='Consultar ou atualizar o próprio perfil',
+        description=(
+            'GET retorna os dados do usuário autenticado. '
+            'PATCH permite alterar nome, telefone e foto de perfil. '
+            'O e-mail não é editável por este endpoint.'
+        ),
+        request=UserProfileUpdateSerializer,
         responses={
             200: UserSerializer,
+            400: None,
             401: None,
         },
     )
     @action(
         detail=False,
-        methods=['get'],
+        methods=['get', 'patch'],
         permission_classes=[IsAuthenticated],
+        parser_classes=[
+            JSONParser,
+            FormParser,
+            MultiPartParser,
+        ],
     )
     def me(self, request):
-        serializer = self.get_serializer(
+        if request.method == 'PATCH':
+            serializer = UserProfileUpdateSerializer(
+                request.user,
+                data=request.data,
+                partial=True,
+                context=self.get_serializer_context(),
+            )
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+
+        output = UserSerializer(
             request.user,
+            context=self.get_serializer_context(),
         )
 
         return Response(
-            serializer.data,
+            output.data,
             status=status.HTTP_200_OK,
         )
 

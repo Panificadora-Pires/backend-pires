@@ -54,6 +54,7 @@ class UserAdmin(BaseUserAdmin):
                 'fields': (
                     'name',
                     'phone',
+                    'avatar',
                     'google_sub',
                     'email_verified',
                 )
@@ -112,6 +113,7 @@ class UserAdmin(BaseUserAdmin):
                     'password2',
                     'name',
                     'phone',
+                    'avatar',
                     'is_active',
                     'is_staff',
                     'is_superuser',
@@ -159,15 +161,18 @@ class VerificationCodeAdmin(admin.ModelAdmin):
         'expires_at',
         'used_at',
     )
+
     list_filter = (
         'purpose',
         'created_at',
         'used_at',
     )
+
     search_fields = (
         'public_id',
         'user__email',
     )
+
     readonly_fields = (
         'public_id',
         'user',

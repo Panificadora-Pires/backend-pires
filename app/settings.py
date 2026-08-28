@@ -67,7 +67,8 @@ FRONTEND_URLS = env_list(
     'FRONTEND_URLS',
     (
         'http://localhost:5173,'
-        'http://127.0.0.1:5173'
+        'http://127.0.0.1:5173,'
+        'https://frontend-pires.vercel.app'
     ),
 )
 
