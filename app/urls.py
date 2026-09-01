@@ -27,6 +27,7 @@ from core.views import (
     UserRegistrationView,
     UserViewSet,
 )
+from favoritos.views import FavoritoViewSet
 from notificacoes.views import NotificacaoViewSet
 from pedidos.views import PedidoViewSet
 
@@ -37,6 +38,7 @@ router.register(r'categorias', CategoriaViewSet, basename='categorias')
 router.register(r'produtos', ProdutoViewSet, basename='produtos')
 router.register(r'promocoes', PromocaoViewSet, basename='promocoes')
 router.register(r'pedidos', PedidoViewSet, basename='pedidos')
+router.register(r'favoritos', FavoritoViewSet, basename='favoritos')
 router.register(
     r'notificacoes',
     NotificacaoViewSet,

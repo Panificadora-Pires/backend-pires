@@ -222,6 +222,7 @@ INSTALLED_APPS = [
     'catalogo',
     'pedidos',
     'notificacoes',
+    'favoritos',
 ]
 
 if CLOUDINARY_URL:
