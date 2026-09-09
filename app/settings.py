@@ -492,3 +492,35 @@ LOGGING = {
         },
     },
 }
+
+
+# ============================================================
+# Mercado Pago / Checkout Transparente
+# ============================================================
+MERCADO_PAGO_ACCESS_TOKEN = os.getenv(
+    'MERCADO_PAGO_ACCESS_TOKEN',
+    '',
+).strip()
+
+MERCADO_PAGO_WEBHOOK_SECRET = os.getenv(
+    'MERCADO_PAGO_WEBHOOK_SECRET',
+    '',
+).strip()
+
+MERCADO_PAGO_WEBHOOK_URL = os.getenv(
+    'MERCADO_PAGO_WEBHOOK_URL',
+    '',
+).strip()
+
+MERCADO_PAGO_API_BASE_URL = os.getenv(
+    'MERCADO_PAGO_API_BASE_URL',
+    'https://api.mercadopago.com',
+).strip().rstrip('/')
+
+MERCADO_PAGO_TIMEOUT_SECONDS = int(
+    os.getenv('MERCADO_PAGO_TIMEOUT_SECONDS', '15')
+)
+
+PAGAMENTO_TEMPO_LIMITE_MINUTOS = int(
+    os.getenv('PAGAMENTO_TEMPO_LIMITE_MINUTOS', '15')
+)
