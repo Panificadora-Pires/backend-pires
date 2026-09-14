@@ -1,7 +1,7 @@
 """
 RN06 e pagamentos online:
 - cancela pedidos prontos não retirados no prazo;
-- cancela pagamentos online que ficaram pendentes além do limite;
+- cancela orders online que ficaram pendentes além do limite;
 - devolve estoque exatamente uma vez.
 """
 
@@ -14,10 +14,9 @@ from django.utils import timezone
 from pedidos.models import Pedido
 from pedidos.services.pagamentos import (
     MercadoPagoError,
-    aplicar_dados_pagamento,
-    buscar_pagamento_por_referencia,
-    cancelar_pagamento_mercado_pago,
-    consultar_pagamento_mercado_pago,
+    aplicar_dados_order,
+    cancelar_order_mercado_pago,
+    consultar_order_mercado_pago,
     preparar_cancelamento_financeiro,
 )
 from pedidos.services.pedido import devolver_estoque_pedido
@@ -40,8 +39,6 @@ class Command(BaseCommand):
         cancelados_retirada = 0
         ignorados_por_falha = 0
         for pedido in prontos_expirados:
-            # Pedido online já pago precisa ser reembolsado ANTES de cancelar
-            # e liberar novamente o estoque.
             if pedido.forma_pagamento in {
                 Pedido.FormaPagamento.PIX,
                 Pedido.FormaPagamento.CARTAO,
@@ -76,18 +73,17 @@ class Command(BaseCommand):
         cancelados_pagamento = 0
 
         for pedido in online_expirados:
-            # Antes de devolver estoque, consulta o provedor para não cancelar
-            # localmente um pagamento que acabou de ser aprovado.
-            try:
-                if pedido.mercadopago_payment_id:
-                    remoto = consultar_pagamento_mercado_pago(
-                        pedido.mercadopago_payment_id,
-                    )
-                else:
-                    remoto = buscar_pagamento_por_referencia(pedido)
+            # Uma order sem ID após timeout é um estado financeiro incerto. Não
+            # liberamos estoque até que a tentativa seja conciliada.
+            if not pedido.mercadopago_order_id:
+                ignorados_por_falha += 1
+                continue
 
-                if remoto:
-                    pedido = aplicar_dados_pagamento(pedido, remoto)
+            try:
+                remoto = consultar_order_mercado_pago(
+                    pedido.mercadopago_order_id,
+                )
+                pedido = aplicar_dados_order(pedido, remoto)
             except MercadoPagoError:
                 ignorados_por_falha += 1
                 continue
@@ -99,26 +95,28 @@ class Command(BaseCommand):
                 cancelados_pagamento += 1
                 continue
 
-            if pedido.mercadopago_payment_id:
-                try:
-                    cancelar_pagamento_mercado_pago(pedido)
-                except MercadoPagoError:
-                    ignorados_por_falha += 1
-                    continue
+            try:
+                remoto = cancelar_order_mercado_pago(pedido)
+                pedido = aplicar_dados_order(pedido, remoto)
+            except MercadoPagoError:
+                ignorados_por_falha += 1
+                continue
 
-            pedido.status = Pedido.Status.CANCELADO
-            pedido.status_pagamento = Pedido.StatusPagamento.CANCELADO
-            pedido.status_atualizado_em = agora
-            pedido.pagamento_expira_em = None
-            pedido.save(
-                update_fields=[
-                    'status',
-                    'status_pagamento',
-                    'status_atualizado_em',
-                    'pagamento_expira_em',
-                ]
-            )
-            devolver_estoque_pedido(pedido)
+            if pedido.status != Pedido.Status.CANCELADO:
+                pedido.status = Pedido.Status.CANCELADO
+                pedido.status_pagamento = Pedido.StatusPagamento.CANCELADO
+                pedido.status_atualizado_em = agora
+                pedido.pagamento_expira_em = None
+                pedido.save(
+                    update_fields=[
+                        'status',
+                        'status_pagamento',
+                        'status_atualizado_em',
+                        'pagamento_expira_em',
+                    ]
+                )
+                devolver_estoque_pedido(pedido)
+
             cancelados_pagamento += 1
 
         self.stdout.write(
@@ -134,6 +132,6 @@ class Command(BaseCommand):
         if ignorados_por_falha:
             self.stdout.write(
                 self.style.WARNING(
-                    f'{ignorados_por_falha} pagamento(s) não foram cancelados porque o provedor não pôde ser consultado.'
+                    f'{ignorados_por_falha} pagamento(s) não foram cancelados porque a order não pôde ser conciliada.'
                 )
             )

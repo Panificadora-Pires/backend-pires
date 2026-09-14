@@ -112,6 +112,13 @@ class Pedido(models.Model):
         verbose_name='status do pagamento',
     )
 
+    mercadopago_order_id = models.CharField(
+        max_length=80,
+        blank=True,
+        db_index=True,
+        verbose_name='ID da order no Mercado Pago',
+    )
+
     mercadopago_payment_id = models.CharField(
         max_length=80,
         blank=True,
@@ -129,6 +136,11 @@ class Pedido(models.Model):
         max_length=120,
         blank=True,
         verbose_name='detalhe do status no Mercado Pago',
+    )
+
+    mercadopago_challenge_url = models.TextField(
+        blank=True,
+        verbose_name='URL do challenge 3DS do Mercado Pago',
     )
 
     pagamento_expira_em = models.DateTimeField(

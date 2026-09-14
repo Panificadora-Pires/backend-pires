@@ -517,10 +517,15 @@ MERCADO_PAGO_API_BASE_URL = os.getenv(
     'https://api.mercadopago.com',
 ).strip().rstrip('/')
 
+MERCADO_PAGO_SANDBOX = env_bool(
+    'MERCADO_PAGO_SANDBOX',
+    True,
+)
+
 MERCADO_PAGO_TIMEOUT_SECONDS = int(
     os.getenv('MERCADO_PAGO_TIMEOUT_SECONDS', '15')
 )
 
 PAGAMENTO_TEMPO_LIMITE_MINUTOS = int(
-    os.getenv('PAGAMENTO_TEMPO_LIMITE_MINUTOS', '15')
+    os.getenv('PAGAMENTO_TEMPO_LIMITE_MINUTOS', '45')
 )

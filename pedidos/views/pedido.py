@@ -24,9 +24,9 @@ from pedidos.serializers import (
 )
 from pedidos.services.pagamentos import (
     MercadoPagoError,
-    aplicar_dados_pagamento,
-    consultar_pagamento_mercado_pago,
-    criar_pagamento_mercado_pago,
+    aplicar_dados_order,
+    consultar_order_mercado_pago,
+    criar_order_mercado_pago,
     forma_pagamento_por_dados,
     prazo_pagamento,
     validar_assinatura_webhook,
@@ -150,12 +150,12 @@ class PedidoViewSet(
                     checkout_id=checkout_id,
                 )
 
-        if pedido.mercadopago_payment_id:
+        if pedido.mercadopago_order_id:
             try:
-                remoto = consultar_pagamento_mercado_pago(
-                    pedido.mercadopago_payment_id,
+                remoto = consultar_order_mercado_pago(
+                    pedido.mercadopago_order_id,
                 )
-                pedido = aplicar_dados_pagamento(
+                pedido = aplicar_dados_order(
                     pedido,
                     remoto,
                     payment_type=dados['payment_type'],
@@ -165,12 +165,12 @@ class PedidoViewSet(
             return self._resposta_checkout(pedido)
 
         try:
-            remoto = criar_pagamento_mercado_pago(
+            remoto = criar_order_mercado_pago(
                 pedido=pedido,
                 payment_type=dados['payment_type'],
                 form_data=dados['form_data'],
             )
-            pedido = aplicar_dados_pagamento(
+            pedido = aplicar_dados_order(
                 pedido,
                 remoto,
                 payment_type=dados['payment_type'],
@@ -232,7 +232,7 @@ class PedidoViewSet(
                 Pedido.FormaPagamento.PIX,
                 Pedido.FormaPagamento.CARTAO,
             }
-            and pedido.mercadopago_payment_id
+            and pedido.mercadopago_order_id
             and pedido.status_pagamento not in {
                 Pedido.StatusPagamento.APROVADO,
                 Pedido.StatusPagamento.RECUSADO,
@@ -241,10 +241,10 @@ class PedidoViewSet(
             }
         ):
             try:
-                remoto = consultar_pagamento_mercado_pago(
-                    pedido.mercadopago_payment_id,
+                remoto = consultar_order_mercado_pago(
+                    pedido.mercadopago_order_id,
                 )
-                pedido = aplicar_dados_pagamento(pedido, remoto)
+                pedido = aplicar_dados_order(pedido, remoto)
                 sincronizacao = 'mercado_pago'
             except MercadoPagoError:
                 sincronizacao = 'indisponivel'
@@ -278,30 +278,30 @@ class PedidoViewSet(
                 status=http_status.HTTP_401_UNAUTHORIZED,
             )
 
-        if request.query_params.get('type') not in {None, 'payment'}:
+        if request.query_params.get('type') not in {None, 'order'}:
             return Response(status=http_status.HTTP_200_OK)
         if not data_id:
             return Response(status=http_status.HTTP_200_OK)
 
         try:
-            remoto = consultar_pagamento_mercado_pago(data_id)
+            remoto = consultar_order_mercado_pago(data_id)
         except MercadoPagoError:
             # 5xx faz o Mercado Pago tentar entregar novamente.
             return Response(status=http_status.HTTP_503_SERVICE_UNAVAILABLE)
 
         pedido = None
-        payment_id = remoto.get('id')
+        order_id = remoto.get('id') or data_id
         external_reference = remoto.get('external_reference')
 
-        if payment_id:
+        if order_id:
             pedido = Pedido.objects.filter(
-                mercadopago_payment_id=str(payment_id),
+                mercadopago_order_id=str(order_id),
             ).first()
         if pedido is None and external_reference:
             pedido = Pedido.objects.filter(pk=external_reference).first()
 
         if pedido is not None:
-            aplicar_dados_pagamento(pedido, remoto)
+            aplicar_dados_order(pedido, remoto)
 
         return Response(status=http_status.HTTP_200_OK)
 
