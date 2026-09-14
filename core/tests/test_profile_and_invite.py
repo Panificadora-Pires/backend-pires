@@ -11,8 +11,13 @@ from core.models import AdminInvite, User
 from core.tests.base import AuthAPITestCase
 
 
+# PNG RGB 1x1 válido.
+#
+# O fixture anterior possuía checksum inválido no chunk IDAT e o Pillow,
+# corretamente, rejeitava o upload antes de chegar à regra de negócio.
 PNG_1X1 = base64.b64decode(
-    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Z6M0AAAAASUVORK5CYII='
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1Pe'
+    'AAAADElEQVR4nGP4//8/AAX+Av4N70a4AAAAAElFTkSuQmCC'
 )
 
 
@@ -32,12 +37,26 @@ class ProfileAndInviteTests(AuthAPITestCase):
             reverse('usuarios-me'),
         )
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['phone'], '+5547999999999')
-        self.assertTrue(response.data['email_verified'])
-        self.assertIsNone(response.data['avatar'])
-        self.assertFalse(response.data['google_connected'])
-        self.assertTrue(response.data['has_usable_password'])
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+        self.assertEqual(
+            response.data['phone'],
+            '+5547999999999',
+        )
+        self.assertTrue(
+            response.data['email_verified'],
+        )
+        self.assertIsNone(
+            response.data['avatar'],
+        )
+        self.assertFalse(
+            response.data['google_connected'],
+        )
+        self.assertTrue(
+            response.data['has_usable_password'],
+        )
 
     def test_me_patch_updates_name_and_phone_without_changing_email(self):
         user = User.objects.create_user(
@@ -60,15 +79,37 @@ class ProfileAndInviteTests(AuthAPITestCase):
             format='json',
         )
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['name'], 'Nome Atualizado')
-        self.assertEqual(response.data['phone'], '+5547988887777')
-        self.assertEqual(response.data['email'], 'usuario@example.com')
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+        self.assertEqual(
+            response.data['name'],
+            'Nome Atualizado',
+        )
+        self.assertEqual(
+            response.data['phone'],
+            '+5547988887777',
+        )
+        self.assertEqual(
+            response.data['email'],
+            'usuario@example.com',
+        )
 
         user.refresh_from_db()
-        self.assertEqual(user.email, 'usuario@example.com')
-        self.assertEqual(user.name, 'Nome Atualizado')
-        self.assertEqual(user.phone, '+5547988887777')
+
+        self.assertEqual(
+            user.email,
+            'usuario@example.com',
+        )
+        self.assertEqual(
+            user.name,
+            'Nome Atualizado',
+        )
+        self.assertEqual(
+            user.phone,
+            '+5547988887777',
+        )
 
     def test_me_patch_rejects_phone_already_used_by_another_user(self):
         User.objects.create_user(
@@ -93,8 +134,14 @@ class ProfileAndInviteTests(AuthAPITestCase):
             format='json',
         )
 
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('phone', response.data)
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+        self.assertIn(
+            'phone',
+            response.data,
+        )
 
     def test_me_patch_uploads_and_removes_avatar(self):
         user = User.objects.create_user(
@@ -108,7 +155,23 @@ class ProfileAndInviteTests(AuthAPITestCase):
         self.client.force_authenticate(user=user)
 
         with tempfile.TemporaryDirectory() as media_root:
-            with override_settings(MEDIA_ROOT=media_root):
+            with override_settings(
+                MEDIA_ROOT=media_root,
+                STORAGES={
+                    'default': {
+                        'BACKEND': (
+                            'django.core.files.storage.'
+                            'FileSystemStorage'
+                        ),
+                    },
+                    'staticfiles': {
+                        'BACKEND': (
+                            'django.contrib.staticfiles.storage.'
+                            'StaticFilesStorage'
+                        ),
+                    },
+                },
+            ):
                 avatar = SimpleUploadedFile(
                     'avatar.png',
                     PNG_1X1,
@@ -121,11 +184,29 @@ class ProfileAndInviteTests(AuthAPITestCase):
                     format='multipart',
                 )
 
-                self.assertEqual(upload.status_code, status.HTTP_200_OK)
-                self.assertTrue(upload.data['avatar'])
+                self.assertEqual(
+                    upload.status_code,
+                    status.HTTP_200_OK,
+                    upload.data,
+                )
+                self.assertTrue(
+                    upload.data['avatar'],
+                )
 
                 user.refresh_from_db()
-                self.assertTrue(user.avatar.name.startswith('usuarios/avatars/'))
+
+                self.assertTrue(bool(user.avatar))
+                self.assertTrue(
+                    user.avatar.name.startswith(
+                        'usuarios/avatars/'
+                    ),
+                    user.avatar.name,
+                )
+                self.assertTrue(
+                    user.avatar.storage.exists(
+                        user.avatar.name,
+                    )
+                )
 
                 remove = self.client.patch(
                     reverse('usuarios-me'),
@@ -133,11 +214,19 @@ class ProfileAndInviteTests(AuthAPITestCase):
                     format='json',
                 )
 
-                self.assertEqual(remove.status_code, status.HTTP_200_OK)
-                self.assertIsNone(remove.data['avatar'])
+                self.assertEqual(
+                    remove.status_code,
+                    status.HTTP_200_OK,
+                    remove.data,
+                )
+                self.assertIsNone(
+                    remove.data['avatar'],
+                )
 
                 user.refresh_from_db()
-                self.assertFalse(bool(user.avatar))
+                self.assertFalse(
+                    bool(user.avatar),
+                )
 
     def test_invited_admin_is_considered_email_verified(self):
         admin = User.objects.create_superuser(
@@ -156,14 +245,17 @@ class ProfileAndInviteTests(AuthAPITestCase):
             create_invite.status_code,
             status.HTTP_201_CREATED,
         )
-
-        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(
+            len(mail.outbox),
+            1,
+        )
 
         invite = AdminInvite.objects.get(
             email='novo-admin@example.com',
         )
 
         self.client.force_authenticate(user=None)
+
         registration = self.client.post(
             reverse('admin_invite_register'),
             {
@@ -180,7 +272,9 @@ class ProfileAndInviteTests(AuthAPITestCase):
             status.HTTP_201_CREATED,
         )
 
-        user = User.objects.get(email=invite.email)
+        user = User.objects.get(
+            email=invite.email,
+        )
         self.assertTrue(user.is_staff)
         self.assertTrue(user.is_active)
         self.assertTrue(user.email_verified)

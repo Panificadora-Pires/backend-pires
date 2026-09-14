@@ -25,6 +25,20 @@ class Pedido(models.Model):
         RETIRADO = 'retirado', 'Retirado'
         CANCELADO = 'cancelado', 'Cancelado'
 
+    class FormaPagamento(models.TextChoices):
+        DINHEIRO = 'dinheiro', 'Dinheiro na retirada'
+        PIX = 'pix', 'Pix'
+        CARTAO = 'cartao', 'Cartão'
+
+    class StatusPagamento(models.TextChoices):
+        PENDENTE = 'pendente', 'Pendente'
+        PROCESSANDO = 'processando', 'Processando'
+        APROVADO = 'aprovado', 'Aprovado'
+        RECUSADO = 'recusado', 'Recusado'
+        CANCELADO = 'cancelado', 'Cancelado'
+        REEMBOLSADO = 'reembolsado', 'Reembolsado'
+        ERRO = 'erro', 'Erro'
+
     TRANSICOES_PERMITIDAS = {
         Status.PENDENTE: {
             Status.CONFIRMADO,
@@ -75,6 +89,79 @@ class Pedido(models.Model):
         editable=False,
         unique=True,
         verbose_name='código de retirada',
+    )
+
+    checkout_id = models.UUIDField(
+        default=uuid.uuid4,
+        editable=False,
+        unique=True,
+        verbose_name='identificador idempotente do checkout',
+    )
+
+    forma_pagamento = models.CharField(
+        max_length=20,
+        choices=FormaPagamento.choices,
+        default=FormaPagamento.DINHEIRO,
+        verbose_name='forma de pagamento',
+    )
+
+    status_pagamento = models.CharField(
+        max_length=20,
+        choices=StatusPagamento.choices,
+        default=StatusPagamento.PENDENTE,
+        verbose_name='status do pagamento',
+    )
+
+    mercadopago_order_id = models.CharField(
+        max_length=80,
+        blank=True,
+        db_index=True,
+        verbose_name='ID da order no Mercado Pago',
+    )
+
+    mercadopago_payment_id = models.CharField(
+        max_length=80,
+        blank=True,
+        db_index=True,
+        verbose_name='ID do pagamento no Mercado Pago',
+    )
+
+    mercadopago_status = models.CharField(
+        max_length=40,
+        blank=True,
+        verbose_name='status bruto no Mercado Pago',
+    )
+
+    mercadopago_status_detail = models.CharField(
+        max_length=120,
+        blank=True,
+        verbose_name='detalhe do status no Mercado Pago',
+    )
+
+    mercadopago_challenge_url = models.TextField(
+        blank=True,
+        verbose_name='URL do challenge 3DS do Mercado Pago',
+    )
+
+    pagamento_expira_em = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name='limite para concluir o pagamento online',
+    )
+
+    pix_qr_code = models.TextField(
+        blank=True,
+        verbose_name='Pix copia e cola',
+    )
+
+    pix_qr_code_base64 = models.TextField(
+        blank=True,
+        verbose_name='QR Code Pix em base64',
+    )
+
+    estoque_devolvido = models.BooleanField(
+        default=False,
+        verbose_name='estoque já devolvido após cancelamento',
     )
 
     class Meta:
