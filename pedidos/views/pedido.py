@@ -1,6 +1,8 @@
+import logging
 from datetime import date
 from decimal import Decimal
 
+from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.db.models import F, Sum
 from django.shortcuts import get_object_or_404
@@ -33,6 +35,9 @@ from pedidos.services.pagamentos import (
 )
 from pedidos.services.pedido import criar_pedido_reservando_estoque
 from pedidos.utils import gerar_qrcode_base64
+
+
+logger = logging.getLogger("pedidos.webhook")
 
 
 class PedidoViewSet(
@@ -268,11 +273,44 @@ class PedidoViewSet(
         data_id_body = (request.data.get('data') or {}).get('id')
         data_id = data_id_query or data_id_body
 
+        # O Mercado Pago assina o data.id recebido na URL, não o ID do body.
+        # Não utilizar data_id_body no HMAC: a assinatura deve seguir o manifesto
+        # oficial e só permitir conciliação após a autenticação bem-sucedida.
+        x_signature = request.headers.get('x-signature')
+        x_request_id = request.headers.get('x-request-id')
         if not validar_assinatura_webhook(
-            x_signature=request.headers.get('x-signature'),
-            x_request_id=request.headers.get('x-request-id'),
+            x_signature=x_signature,
+            x_request_id=x_request_id,
             data_id=data_id_query,
         ):
+            # Diagnóstico seguro para o servidor: não registra assinatura, IDs,
+            # chave secreta, corpo do evento nem informações do pagamento.
+            partes = {}
+            for parte in (x_signature or '').split(','):
+                chave, separador, valor = parte.partition('=')
+                if separador:
+                    partes[chave.strip()] = valor.strip()
+
+            if not getattr(settings, 'MERCADO_PAGO_WEBHOOK_SECRET', ''):
+                motivo = 'secret_ausente'
+            elif not x_signature:
+                motivo = 'x_signature_ausente'
+            elif not partes.get('ts') or not partes.get('v1'):
+                motivo = 'x_signature_incompleta'
+            else:
+                motivo = 'hmac_divergente'
+
+            logger.warning(
+                'Mercado Pago webhook rejeitado: motivo=%s '
+                'data_id_query=%s data_id_body=%s ids_concordam=%s '
+                'x_request_id=%s x_signature=%s',
+                motivo,
+                bool(data_id_query),
+                bool(data_id_body),
+                bool(data_id_query and data_id_body and str(data_id_query) == str(data_id_body)),
+                bool(x_request_id),
+                bool(x_signature),
+            )
             return Response(
                 {'detail': 'Assinatura de webhook inválida.'},
                 status=http_status.HTTP_401_UNAUTHORIZED,
