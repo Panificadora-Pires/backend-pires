@@ -476,7 +476,7 @@ def prazo_pagamento():
     return timezone.now() + timedelta(minutes=minutos)
 
 
-def validar_assinatura_webhook(*, x_signature, x_request_id, data_id):
+def validar_assinatura_webhook(*, x_signature, x_request_id, data_id, log_rejection=True):
     """Valida x-signature conforme o manifesto HMAC do Mercado Pago.
 
     Os logs abaixo registram somente presença/ausência dos componentes
@@ -489,18 +489,19 @@ def validar_assinatura_webhook(*, x_signature, x_request_id, data_id):
     data_id = str(data_id or '').strip()
 
     def rejeitar(motivo):
-        logger.warning(
-            (
-                'Mercado Pago webhook rejeitado: motivo=%s '
-                'secret_configured=%s signature_present=%s '
-                'request_id_present=%s data_id_present=%s'
-            ),
-            motivo,
-            bool(secret),
-            bool(x_signature),
-            bool(x_request_id),
-            bool(data_id),
-        )
+        if log_rejection:
+            logger.warning(
+                (
+                    'Mercado Pago webhook rejeitado: motivo=%s '
+                    'secret_configured=%s signature_present=%s '
+                    'request_id_present=%s data_id_present=%s'
+                ),
+                motivo,
+                bool(secret),
+                bool(x_signature),
+                bool(x_request_id),
+                bool(data_id),
+            )
         return False
 
     if not secret:
