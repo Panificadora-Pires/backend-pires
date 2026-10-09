@@ -478,3 +478,61 @@ class CheckoutPagamentoTestCase(CriaUsuariosEProdutosMixin, APITestCase):
         logger_view.info.assert_called_once()
         assert 'conciliado com sucesso' in logger_view.info.call_args.args[0]
 
+    @patch('pedidos.services.pagamentos.requests.get')
+    def test_cancelamento_admin_sandbox_permite_order_antiga_nao_encontrada(self, get):
+        pedido = Pedido.objects.create(
+            usuario=self.aluno,
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.PENDENTE,
+            status_pagamento=Pedido.StatusPagamento.PENDENTE,
+            mercadopago_order_id='ORD01ANTIGASANDBOX',
+        )
+
+        resposta_mp = Mock(status_code=404)
+        resposta_mp.json.return_value = {'message': 'Order not found.'}
+        get.return_value = resposta_mp
+
+        self.client.force_authenticate(user=self.admin)
+
+        resposta = self.client.patch(
+            f'/api/pedidos/{pedido.id}/alterar_status/',
+            {'status': Pedido.Status.CANCELADO},
+            format='json',
+        )
+
+        assert resposta.status_code == status.HTTP_200_OK
+        pedido.refresh_from_db()
+        assert pedido.status == Pedido.Status.CANCELADO
+        assert pedido.status_pagamento == Pedido.StatusPagamento.CANCELADO
+        assert pedido.mercadopago_status == 'not_found'
+        assert pedido.mercadopago_status_detail == 'sandbox_order_not_found'
+        assert pedido.pagamento_expira_em is None
+
+    @override_settings(MERCADO_PAGO_SANDBOX=False)
+    @patch('pedidos.services.pagamentos.requests.get')
+    def test_cancelamento_admin_producao_nao_ignora_order_nao_encontrada(self, get):
+        pedido = Pedido.objects.create(
+            usuario=self.aluno,
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status=Pedido.Status.PENDENTE,
+            status_pagamento=Pedido.StatusPagamento.PENDENTE,
+            mercadopago_order_id='ORD01ANTIGAPROD',
+        )
+
+        resposta_mp = Mock(status_code=404)
+        resposta_mp.json.return_value = {'message': 'Order not found.'}
+        get.return_value = resposta_mp
+
+        self.client.force_authenticate(user=self.admin)
+
+        resposta = self.client.patch(
+            f'/api/pedidos/{pedido.id}/alterar_status/',
+            {'status': Pedido.Status.CANCELADO},
+            format='json',
+        )
+
+        assert resposta.status_code == status.HTTP_400_BAD_REQUEST
+        pedido.refresh_from_db()
+        assert pedido.status == Pedido.Status.PENDENTE
+        assert pedido.status_pagamento == Pedido.StatusPagamento.PENDENTE
+

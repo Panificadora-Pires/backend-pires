@@ -447,7 +447,48 @@ def preparar_cancelamento_financeiro(pedido):
             estado_incerto=True,
         )
 
-    remoto = consultar_order_mercado_pago(pedido.mercadopago_order_id)
+    try:
+        remoto = consultar_order_mercado_pago(pedido.mercadopago_order_id)
+    except MercadoPagoError as exc:
+        pode_limpar_order_antiga_sandbox = (
+            settings.MERCADO_PAGO_SANDBOX
+            and exc.status_code == 404
+            and pedido.status_pagamento in {
+                Pedido.StatusPagamento.PENDENTE,
+                Pedido.StatusPagamento.PROCESSANDO,
+                Pedido.StatusPagamento.ERRO,
+            }
+        )
+
+        if not pode_limpar_order_antiga_sandbox:
+            raise
+
+        # Orders antigas de teste podem deixar de existir para as credenciais
+        # sandbox atuais. Como não há dinheiro real e o pagamento local nunca
+        # foi aprovado, permitimos o cancelamento administrativo local.
+        pedido.status_pagamento = Pedido.StatusPagamento.CANCELADO
+        pedido.mercadopago_status = 'not_found'
+        pedido.mercadopago_status_detail = 'sandbox_order_not_found'
+        pedido.pagamento_expira_em = None
+        pedido.mercadopago_challenge_url = ''
+        pedido.save(
+            update_fields=[
+                'status_pagamento',
+                'mercadopago_status',
+                'mercadopago_status_detail',
+                'pagamento_expira_em',
+                'mercadopago_challenge_url',
+            ]
+        )
+        logger.warning(
+            (
+                'Order antiga do sandbox não encontrada no Mercado Pago; '
+                'cancelamento local liberado order_id_present=True '
+                'pagamento_aprovado=False'
+            )
+        )
+        return pedido
+
     pedido = aplicar_dados_order(pedido, remoto)
 
     if pedido.status_pagamento == Pedido.StatusPagamento.APROVADO:
