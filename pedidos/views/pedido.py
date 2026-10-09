@@ -1,3 +1,4 @@
+import logging
 from datetime import date
 from decimal import Decimal
 
@@ -35,6 +36,8 @@ from pedidos.services.pagamentos import (
 from pedidos.services.pedido import criar_pedido_reservando_estoque
 from pedidos.utils import gerar_qrcode_base64
 
+
+logger = logging.getLogger(__name__)
 
 class PedidoViewSet(
     CreateModelMixin,
@@ -274,6 +277,7 @@ class PedidoViewSet(
             x_signature=request.headers.get('x-signature'),
             x_request_id=request.headers.get('x-request-id'),
             data_id=data_id,
+            log_rejection=not settings.MERCADO_PAGO_SANDBOX,
         )
 
         # Em produção, HMAC inválido continua sendo rejeitado sem consultar a API.
@@ -302,10 +306,23 @@ class PedidoViewSet(
                 mercadopago_order_id=str(data_id),
             ).first()
             if pedido_fallback is None:
+                logger.warning(
+                    (
+                        'Mercado Pago webhook sandbox rejeitado: '
+                        'hmac_incompativel=True order_local_encontrada=False'
+                    )
+                )
                 return Response(
                     {'detail': 'Assinatura de webhook inválida.'},
                     status=http_status.HTTP_401_UNAUTHORIZED,
                 )
+
+            logger.warning(
+                (
+                    'Mercado Pago webhook sandbox com HMAC incompatível; '
+                    'conciliando via Orders API order_local_encontrada=True'
+                )
+            )
 
         try:
             # Fonte de verdade: Orders API autenticada com o Access Token.
@@ -319,6 +336,12 @@ class PedidoViewSet(
 
         if pedido_fallback is not None:
             aplicar_dados_order(pedido_fallback, remoto)
+            logger.info(
+                (
+                    'Mercado Pago webhook sandbox conciliado com sucesso '
+                    'via Orders API'
+                )
+            )
             return Response(status=http_status.HTTP_200_OK)
 
         pedido = Pedido.objects.filter(
