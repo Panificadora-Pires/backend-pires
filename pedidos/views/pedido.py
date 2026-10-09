@@ -1,6 +1,7 @@
 from datetime import date
 from decimal import Decimal
 
+from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.db.models import F, Sum
 from django.shortcuts import get_object_or_404
@@ -267,36 +268,64 @@ class PedidoViewSet(
         data_id_query = request.query_params.get('data.id')
         data_id_body = (request.data.get('data') or {}).get('id')
         data_id = data_id_query or data_id_body
+        tipo = request.query_params.get('type')
 
-        if not validar_assinatura_webhook(
+        assinatura_valida = validar_assinatura_webhook(
             x_signature=request.headers.get('x-signature'),
             x_request_id=request.headers.get('x-request-id'),
             data_id=data_id,
-        ):
+        )
+
+        # Em produção, HMAC inválido continua sendo rejeitado sem consultar a API.
+        if not assinatura_valida and not settings.MERCADO_PAGO_SANDBOX:
             return Response(
                 {'detail': 'Assinatura de webhook inválida.'},
                 status=http_status.HTTP_401_UNAUTHORIZED,
             )
 
-        if request.query_params.get('type') not in {None, 'order'}:
+        if tipo not in {None, 'order'}:
             return Response(status=http_status.HTTP_200_OK)
+
         if not data_id:
-            return Response(status=http_status.HTTP_200_OK)
+            if assinatura_valida:
+                return Response(status=http_status.HTTP_200_OK)
+            return Response(
+                {'detail': 'Assinatura de webhook inválida.'},
+                status=http_status.HTTP_401_UNAUTHORIZED,
+            )
+
+        pedido_fallback = None
+        if not assinatura_valida:
+            # No sandbox, o corpo do webhook inválido não é fonte de verdade.
+            # O fallback só existe para uma Order já conhecida localmente.
+            pedido_fallback = Pedido.objects.filter(
+                mercadopago_order_id=str(data_id),
+            ).first()
+            if pedido_fallback is None:
+                return Response(
+                    {'detail': 'Assinatura de webhook inválida.'},
+                    status=http_status.HTTP_401_UNAUTHORIZED,
+                )
 
         try:
+            # Fonte de verdade: Orders API autenticada com o Access Token.
             remoto = consultar_order_mercado_pago(data_id)
         except MercadoPagoError:
-            # 5xx faz o Mercado Pago tentar entregar novamente.
             return Response(status=http_status.HTTP_503_SERVICE_UNAVAILABLE)
 
-        pedido = None
-        order_id = remoto.get('id') or data_id
+        order_id = str(remoto.get('id') or '')
+        if not order_id or order_id != str(data_id):
+            return Response(status=http_status.HTTP_502_BAD_GATEWAY)
+
+        if pedido_fallback is not None:
+            aplicar_dados_order(pedido_fallback, remoto)
+            return Response(status=http_status.HTTP_200_OK)
+
+        pedido = Pedido.objects.filter(
+            mercadopago_order_id=order_id,
+        ).first()
         external_reference = remoto.get('external_reference')
 
-        if order_id:
-            pedido = Pedido.objects.filter(
-                mercadopago_order_id=str(order_id),
-            ).first()
         if pedido is None and external_reference:
             pedido = Pedido.objects.filter(pk=external_reference).first()
 

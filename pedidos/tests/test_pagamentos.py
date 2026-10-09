@@ -314,3 +314,116 @@ class CheckoutPagamentoTestCase(CriaUsuariosEProdutosMixin, APITestCase):
         assert pedido.status_pagamento == Pedido.StatusPagamento.APROVADO
         assert pedido.status == Pedido.Status.CONFIRMADO
         assert pedido.mercadopago_payment_id == 'PAY01WEBHOOK'
+
+    @patch('pedidos.services.pagamentos.requests.get')
+    def test_webhook_sandbox_hmac_invalido_concilia_order_local_via_api(self, get):
+        pedido = Pedido.objects.create(
+            usuario=self.aluno,
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status_pagamento=Pedido.StatusPagamento.PENDENTE,
+            mercadopago_order_id='ORD01SANDBOXFALLBACK',
+        )
+
+        resposta_mp = Mock(status_code=200)
+        resposta_mp.json.return_value = {
+            'id': 'ORD01SANDBOXFALLBACK',
+            'external_reference': str(pedido.id),
+            'status': 'processed',
+            'status_detail': 'accredited',
+            'transactions': {
+                'payments': [
+                    {
+                        'id': 'PAY01SANDBOXFALLBACK',
+                        'status': 'processed',
+                        'status_detail': 'accredited',
+                        'payment_method': {'id': 'pix', 'type': 'bank_transfer'},
+                    }
+                ]
+            },
+        }
+        get.return_value = resposta_mp
+
+        self.client.force_authenticate(user=None)
+        resposta = self.client.post(
+            (
+                '/api/pedidos/mercado_pago_webhook/'
+                '?data.id=ORD01SANDBOXFALLBACK&type=order'
+            ),
+            {},
+            format='json',
+            HTTP_X_SIGNATURE='ts=1742505638683,v1=assinatura-invalida',
+            HTTP_X_REQUEST_ID='request-sandbox',
+        )
+
+        assert resposta.status_code == status.HTTP_200_OK
+        pedido.refresh_from_db()
+        assert pedido.status_pagamento == Pedido.StatusPagamento.APROVADO
+        assert pedido.status == Pedido.Status.CONFIRMADO
+        assert pedido.mercadopago_payment_id == 'PAY01SANDBOXFALLBACK'
+        get.assert_called_once()
+
+    @patch('pedidos.services.pagamentos.requests.get')
+    def test_webhook_sandbox_hmac_invalido_nao_consulta_order_desconhecida(self, get):
+        self.client.force_authenticate(user=None)
+        resposta = self.client.post(
+            '/api/pedidos/mercado_pago_webhook/?data.id=ORDDESCONHECIDA&type=order',
+            {},
+            format='json',
+            HTTP_X_SIGNATURE='ts=1742505638683,v1=assinatura-invalida',
+            HTTP_X_REQUEST_ID='request-desconhecida',
+        )
+
+        assert resposta.status_code == status.HTTP_401_UNAUTHORIZED
+        get.assert_not_called()
+
+    @override_settings(MERCADO_PAGO_SANDBOX=False)
+    @patch('pedidos.services.pagamentos.requests.get')
+    def test_webhook_producao_hmac_invalido_continua_rejeitado(self, get):
+        Pedido.objects.create(
+            usuario=self.aluno,
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status_pagamento=Pedido.StatusPagamento.PENDENTE,
+            mercadopago_order_id='ORD01PRODUCAO',
+        )
+
+        self.client.force_authenticate(user=None)
+        resposta = self.client.post(
+            '/api/pedidos/mercado_pago_webhook/?data.id=ORD01PRODUCAO&type=order',
+            {},
+            format='json',
+            HTTP_X_SIGNATURE='ts=1742505638683,v1=assinatura-invalida',
+            HTTP_X_REQUEST_ID='request-producao',
+        )
+
+        assert resposta.status_code == status.HTTP_401_UNAUTHORIZED
+        get.assert_not_called()
+
+    @patch('pedidos.services.pagamentos.requests.get')
+    def test_webhook_sandbox_fallback_rejeita_order_id_divergente(self, get):
+        Pedido.objects.create(
+            usuario=self.aluno,
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status_pagamento=Pedido.StatusPagamento.PENDENTE,
+            mercadopago_order_id='ORD01ESPERADA',
+        )
+
+        resposta_mp = Mock(status_code=200)
+        resposta_mp.json.return_value = {
+            'id': 'ORD01OUTRA',
+            'status': 'processed',
+            'status_detail': 'accredited',
+            'transactions': {'payments': []},
+        }
+        get.return_value = resposta_mp
+
+        self.client.force_authenticate(user=None)
+        resposta = self.client.post(
+            '/api/pedidos/mercado_pago_webhook/?data.id=ORD01ESPERADA&type=order',
+            {},
+            format='json',
+            HTTP_X_SIGNATURE='ts=1742505638683,v1=assinatura-invalida',
+            HTTP_X_REQUEST_ID='request-divergente',
+        )
+
+        assert resposta.status_code == status.HTTP_502_BAD_GATEWAY
+
