@@ -530,14 +530,40 @@ def validar_assinatura_webhook(*, x_signature, x_request_id, data_id):
         manifest_parts.append(f'request-id:{x_request_id};')
     manifest_parts.append(f'ts:{timestamp};')
 
+    manifesto = ''.join(manifest_parts)
     esperado = hmac.new(
         secret.encode('utf-8'),
-        ''.join(manifest_parts).encode('utf-8'),
+        manifesto.encode('utf-8'),
         hashlib.sha256,
     ).hexdigest()
 
-    valido = hmac.compare_digest(esperado, assinatura.lower())
-    if not valido:
-        return rejeitar('hmac_mismatch')
+    assinatura_normalizada = assinatura.lower()
+    if hmac.compare_digest(esperado, assinatura_normalizada):
+        return True
 
-    return True
+    # Compatibilidade defensiva: a documentação atual de Orders/SDK preserva
+    # o case de data.id, mas há fluxos/documentação do próprio Mercado Pago
+    # que ainda usam o ID alfanumérico em lowercase no manifesto.
+    # Continuamos exigindo HMAC válido com o MESMO secret.
+    if data_id and data_id.isalnum():
+        data_id_lower = data_id.lower()
+        if data_id_lower != data_id:
+            manifest_parts_lower = [f'id:{data_id_lower};']
+            if x_request_id:
+                manifest_parts_lower.append(f'request-id:{x_request_id};')
+            manifest_parts_lower.append(f'ts:{timestamp};')
+
+            esperado_lower = hmac.new(
+                secret.encode('utf-8'),
+                ''.join(manifest_parts_lower).encode('utf-8'),
+                hashlib.sha256,
+            ).hexdigest()
+
+            if hmac.compare_digest(esperado_lower, assinatura_normalizada):
+                logger.warning(
+                    'Mercado Pago webhook validado com canonicalizacao '
+                    'legacy_lowercase_data_id=True'
+                )
+                return True
+
+    return rejeitar('hmac_mismatch')

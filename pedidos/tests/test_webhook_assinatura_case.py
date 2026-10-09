@@ -36,10 +36,21 @@ class WebhookAssinaturaCaseTests(SimpleTestCase):
         )
 
     @override_settings(MERCADO_PAGO_WEBHOOK_SECRET=SECRET)
-    def test_assinatura_com_id_lowercase_nao_valida_id_uppercase(self):
-        self.assertFalse(
+    def test_assinatura_legacy_lowercase_valida_id_uppercase(self):
+        self.assertTrue(
             validar_assinatura_webhook(
                 x_signature=self._signature(self.DATA_ID.lower()),
+                x_request_id=self.REQUEST_ID,
+                data_id=self.DATA_ID,
+            )
+        )
+
+    @override_settings(MERCADO_PAGO_WEBHOOK_SECRET=SECRET)
+    def test_assinatura_incorreta_continua_rejeitada(self):
+        assinatura = self._signature('OUTRO-ID')
+        self.assertFalse(
+            validar_assinatura_webhook(
+                x_signature=assinatura,
                 x_request_id=self.REQUEST_ID,
                 data_id=self.DATA_ID,
             )
