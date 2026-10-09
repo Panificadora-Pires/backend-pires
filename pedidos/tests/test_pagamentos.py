@@ -427,3 +427,54 @@ class CheckoutPagamentoTestCase(CriaUsuariosEProdutosMixin, APITestCase):
 
         assert resposta.status_code == status.HTTP_502_BAD_GATEWAY
 
+    @patch('pedidos.views.pedido.logger')
+    @patch('pedidos.services.pagamentos.logger')
+    @patch('pedidos.services.pagamentos.requests.get')
+    def test_webhook_sandbox_fallback_usa_log_contextual(
+        self,
+        get,
+        logger_pagamentos,
+        logger_view,
+    ):
+        pedido = Pedido.objects.create(
+            usuario=self.aluno,
+            forma_pagamento=Pedido.FormaPagamento.PIX,
+            status_pagamento=Pedido.StatusPagamento.PENDENTE,
+            mercadopago_order_id='ORD01LOGSANDBOX',
+        )
+
+        resposta_mp = Mock(status_code=200)
+        resposta_mp.json.return_value = {
+            'id': 'ORD01LOGSANDBOX',
+            'external_reference': str(pedido.id),
+            'status': 'processed',
+            'status_detail': 'accredited',
+            'transactions': {
+                'payments': [
+                    {
+                        'id': 'PAY01LOGSANDBOX',
+                        'status': 'processed',
+                        'status_detail': 'accredited',
+                        'payment_method': {'id': 'pix', 'type': 'bank_transfer'},
+                    }
+                ]
+            },
+        }
+        get.return_value = resposta_mp
+
+        self.client.force_authenticate(user=None)
+        resposta = self.client.post(
+            '/api/pedidos/mercado_pago_webhook/?data.id=ORD01LOGSANDBOX&type=order',
+            {},
+            format='json',
+            HTTP_X_SIGNATURE='ts=1742505638683,v1=assinatura-invalida',
+            HTTP_X_REQUEST_ID='request-log-sandbox',
+        )
+
+        assert resposta.status_code == status.HTTP_200_OK
+        logger_pagamentos.warning.assert_not_called()
+        logger_view.warning.assert_called_once()
+        assert 'conciliando via Orders API' in logger_view.warning.call_args.args[0]
+        logger_view.info.assert_called_once()
+        assert 'conciliado com sucesso' in logger_view.info.call_args.args[0]
+
