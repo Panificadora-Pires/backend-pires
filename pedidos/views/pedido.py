@@ -271,7 +271,7 @@ class PedidoViewSet(
         if not validar_assinatura_webhook(
             x_signature=request.headers.get('x-signature'),
             x_request_id=request.headers.get('x-request-id'),
-            data_id=data_id_query,
+            data_id=data_id,
         ):
             return Response(
                 {'detail': 'Assinatura de webhook inválida.'},
