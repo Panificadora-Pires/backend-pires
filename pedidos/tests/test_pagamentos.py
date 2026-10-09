@@ -293,7 +293,7 @@ class CheckoutPagamentoTestCase(CriaUsuariosEProdutosMixin, APITestCase):
         data_id = 'ORD01WEBHOOK'
         request_id = 'request-123'
         ts = '1742505638683'
-        manifest = f'id:{data_id.lower()};request-id:{request_id};ts:{ts};'
+        manifest = f'id:{data_id};request-id:{request_id};ts:{ts};'
         assinatura = hmac.new(
             b'segredo-teste',
             manifest.encode(),
