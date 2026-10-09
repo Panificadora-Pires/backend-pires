@@ -1,280 +1,565 @@
-# Backend — Sistema de Cantina Escolar (IFC)
+# Pires Panificadora — Backend
 
-Documentação técnica do backend: o que é, como rodar, e tudo que a API oferece hoje.
+API REST do sistema de pedidos da Pires Panificadora.
 
----
+O backend é responsável por autenticação, catálogo, favoritos, pedidos, pagamentos, estoque, notificações, retirada por QR Code, relatórios e administração.
 
-## 1. O que é
+## Stack
 
-API REST em Django + Django REST Framework para o sistema de pré-pedidos da cantina do IFC. Alunos reservam produtos antes do intervalo; a administração controla estoque, promoções, categorias e o fluxo de preparo/retirada dos pedidos.
+- Python 3.12
+- Django 5.2
+- Django REST Framework
+- SimpleJWT
+- django-filter
+- drf-spectacular
+- PostgreSQL
+- SQLite para desenvolvimento
+- Cloudinary
+- WhiteNoise
+- Gunicorn
+- Requests
+- Google Auth
+- Mercado Pago Orders API
+- PDM
 
-Construído em cima do template Django do professor Marco André Mendes ([`template_django_pdm`](https://github.com/marrcandre/template_django_pdm)), gerenciado com [PDM](https://pdm-project.org/).
+## URL de produção
 
-### Stack
+API:
 
-| Camada | Tecnologia |
-|---|---|
-| Linguagem / Framework | Python 3 + Django 5 |
-| API | Django REST Framework |
-| Autenticação | JWT (`djangorestframework-simplejwt`) |
-| Banco (local) | SQLite |
-| Banco (produção) | PostgreSQL, via `dj-database-url` |
-| Imagens | Cloudinary (`django-cloudinary-storage`), com fallback pra disco local se `CLOUDINARY_URL` não estiver definida |
-| Documentação da API | drf-spectacular (Swagger/Redoc automáticos) |
-| Filtros | django-filter |
-| Gerenciador de pacotes | PDM |
-
-### Estrutura de apps
-
-O backend é dividido em 4 apps Django, cada um com responsabilidade única:
-
-```
-core/          → Usuário (login por e-mail), autenticação JWT, permissões compartilhadas
-catalogo/      → Categoria, Produto, Promoção (o "cardápio")
-pedidos/       → Pedido, ItemPedido, QR Code de retirada, regras de negócio do pedido
-notificacoes/  → Notificação ao aluno (escuta eventos de pedidos via Django Signal)
+```text
+https://backend-pires.class.fabricadesoftware.ifc.edu.br/api
 ```
 
-Dentro de cada app, quando há mais de um model/serializer/view, eles ficam em pastas (`models/`, `serializers/`, `views/`) com um arquivo por entidade — em vez de um `models.py` gigante.
+Frontend autorizado:
 
-`pedidos` depende de `catalogo` (um `ItemPedido` referencia um `Produto`). `notificacoes` depende de `pedidos` (escuta o signal `pedido_ficou_pronto`), mas **`pedidos` não conhece `notificacoes`** — a comunicação é via Django Signals, então dá pra remover/trocar o sistema de notificação sem tocar no app de pedidos.
+```text
+https://frontend-pires.vercel.app
+```
 
----
+## Arquitetura
 
-## 2. Como rodar localmente
+O projeto é dividido por domínio:
+
+```text
+app/            → configuração global do Django
+core/           → usuários, autenticação, convites, verificação e permissões
+catalogo/       → categorias, produtos e promoções
+favoritos/      → produtos favoritados
+notificacoes/   → notificações dos usuários
+pedidos/        → pedidos, estoque, pagamentos, QR Code e relatórios
+scripts/        → scripts auxiliares
+```
+
+Nos módulos maiores, models, serializers e views ficam separados em arquivos próprios.
+
+## Desenvolvimento local
 
 ### Pré-requisitos
-- Python 3.11+
-- [PDM](https://pdm-project.org/latest/#installation) instalado
 
-### Passo a passo
+- Python 3.12
+- PDM
+
+### Instalação
 
 ```bash
-# 1. Instalar as dependências (cria o venv automaticamente)
 pdm install
+```
 
-# 2. Copiar o arquivo de variáveis de ambiente de exemplo (se existir) e ajustar
-cp .env.example .env    # se não existir .env.example, criar um .env com as variáveis da seção 3
+Aplique as migrations:
 
-# 3. Aplicar as migrations (cria o banco SQLite local)
-pdm migrate
+```bash
+pdm run python manage.py migrate
+```
 
-# 4. Popular o banco com dados de exemplo (categorias, produtos, promoções, usuários, pedidos)
+Opcionalmente, carregue os dados de exemplo:
+
+```bash
 pdm run python manage.py seed_dados
+```
 
-# 5. Rodar o servidor
+Execute o servidor:
+
+```bash
 pdm run python manage.py runserver
 ```
 
-Depois disso, a API está em `http://127.0.0.1:8000/api/`.
+Se o projeto possuir o script `dev` configurado no PDM, também pode ser utilizado:
 
-### Credenciais criadas pelo `seed_dados`
-
-| Papel | E-mail | Senha |
-|---|---|---|
-| Administração | `admin@cantina.ifc.edu.br` | `senha123` |
-| Aluno | `joao@aluno.ifc.edu.br` | `senha123` |
-| Aluno | `maria@aluno.ifc.edu.br` | `senha123` |
-| Aluno | `pedro@aluno.ifc.edu.br` | `senha123` |
-
-Rodar de novo é seguro (o comando pula o que já existe). Pra resetar os dados de exemplo: `pdm run python manage.py seed_dados --limpar`.
-
-### Onde ver a API sem precisar de frontend
-
-| URL | O que é |
-|---|---|
-| `/admin/` | Django Admin — CRUD manual de tudo, útil pra depurar dados |
-| `/api/doc/` | Swagger UI — testa endpoints direto do navegador |
-| `/api/schema/` | Schema OpenAPI cru (JSON) |
-
----
-
-## 3. Variáveis de ambiente
-
-| Variável | Obrigatória | Padrão | Descrição |
-|---|---|---|---|
-| `SECRET_KEY` | produção | `django-insecure` (dev) | Chave secreta do Django |
-| `DEBUG` | não | `True` | Modo debug |
-| `DATABASE_URL` | produção | SQLite local | String de conexão (Postgres em produção) |
-| `CLOUDINARY_URL` | não | vazio | Se ausente, upload de imagem cai pro disco local (`media/`) sem erro |
-| `FRONTEND_URLS` | não | `http://localhost:5173,http://127.0.0.1:5173` | Origens liberadas no CORS/CSRF (endereços do frontend Vue) |
-| `PEDIDO_TEMPO_LIMITE_RETIRADA_MINUTOS` | não | `15` | RN06 — minutos que um pedido pode ficar "pronto" antes do cancelamento automático |
-
----
-
-## 4. Autenticação
-
-JWT via `djangorestframework-simplejwt`. Login é por **e-mail**, não username.
-
-| Endpoint | Método | Descrição |
-|---|---|---|
-| `/api/registro/` | `POST` | Cria uma conta de aluno (`email`, `name`, `password`) |
-| `/api/token/` | `POST` | Login — recebe `email`+`password`, retorna `access` e `refresh` |
-| `/api/token/refresh/` | `POST` | Troca o `refresh` por um novo `access` |
-| `/api/token/verify/` | `POST` | Verifica se um token ainda é válido |
-
-- **Access token**: expira em 3 horas.
-- **Refresh token**: expira em 1 dia.
-
-Todas as rotas abaixo (exceto leitura anônima quando indicado) exigem o header:
+```bash
+pdm dev
 ```
+
+API local:
+
+```text
+http://127.0.0.1:8000/api
+```
+
+## Comandos úteis
+
+```bash
+pdm run python manage.py check
+pdm run python manage.py makemigrations --check
+pdm run python manage.py migrate
+pdm run python manage.py test
+pdm run python manage.py test pedidos
+pdm run python manage.py collectstatic --noinput
+```
+
+Para popular o banco:
+
+```bash
+pdm run python manage.py seed_dados
+```
+
+Para limpar e recriar os dados de exemplo, quando suportado pelo comando:
+
+```bash
+pdm run python manage.py seed_dados --limpar
+```
+
+Para executar o cancelamento de pedidos expirados:
+
+```bash
+pdm run python manage.py cancelar_pedidos_expirados
+```
+
+## Documentação da API
+
+Quando habilitado no projeto:
+
+```text
+/api/doc/       → Swagger UI
+/api/schema/    → OpenAPI
+/admin/         → Django Admin
+```
+
+## Banco de dados
+
+Em desenvolvimento existe fallback para SQLite.
+
+Em produção é utilizado PostgreSQL através de:
+
+```env
+DATABASE_URL=
+```
+
+## Arquivos e imagens
+
+Em produção, uploads devem ser persistidos através do Cloudinary:
+
+```env
+CLOUDINARY_URL=
+```
+
+Sem storage persistente, arquivos enviados para o filesystem da instância podem ser perdidos após restart ou redeploy.
+
+## Autenticação
+
+A autenticação utiliza JWT através do SimpleJWT.
+
+O sistema também possui recursos de:
+
+- registro;
+- login;
+- refresh de token;
+- login Google;
+- verificação de conta;
+- recuperação de senha;
+- perfil;
+- convites administrativos.
+
+As rotas protegidas utilizam:
+
+```http
 Authorization: Bearer <access_token>
 ```
 
-### Papéis de usuário
+O sistema diferencia usuários comuns e administração por permissões do backend. Um usuário não deve conseguir promover a própria conta através de endpoint público.
 
-Não existe um model separado de "papel". A diferenciação é pelo campo `is_staff` do `User`:
-- `is_staff = True` → Administração da cantina.
-- `is_staff = False` → Aluno.
+## Catálogo
 
-Isso é decidido no Django Admin ou diretamente no banco — não existe endpoint público para um usuário virar admin sozinho (por design).
+O módulo `catalogo` é responsável por:
 
----
+- categorias;
+- produtos;
+- preços;
+- estoque;
+- promoções;
+- validações de promoção;
+- dados utilizados pelo cardápio.
 
-## 5. Endpoints por módulo
+As validações de preço e disponibilidade devem sempre ocorrer no backend.
 
-Todos usam paginação por página (`page`, `page_size`, resposta com `total_pages`/`results`) e podem ser filtrados via query params quando indicado.
+## Favoritos
 
-### 5.1 Usuários (`core`)
+O módulo `favoritos` gerencia produtos favoritados pelos usuários.
 
-| Endpoint | Método | Quem acessa | Descrição |
-|---|---|---|---|
-| `/api/usuarios/` | `GET` | autenticado | Lista usuários |
-| `/api/usuarios/{id}/` | `GET` | autenticado | Detalhe de um usuário |
+O frontend possui serviço e store próprios para essa funcionalidade, mas a persistência pertence ao backend.
 
-### 5.2 Catálogo (`catalogo`)
+## Notificações
 
-| Endpoint | Método | Quem acessa | Descrição |
-|---|---|---|---|
-| `/api/categorias/` | `GET` | qualquer autenticado | Lista categorias (filtro: `?ativa=true`) |
-| `/api/categorias/` | `POST`/`PUT`/`DELETE` | admin | CRUD de categoria |
-| `/api/produtos/` | `GET` | qualquer autenticado | Cardápio (filtros: `?categoria=`, `?ativo=`, `?destaque=`) — usa serializer enxuto, sem dado interno |
-| `/api/produtos/{id}/` | `GET` | qualquer autenticado | Detalhe do produto (inclui descrição e estoque) |
-| `/api/produtos/` | `POST`/`PUT`/`PATCH` | admin | Cadastro/edição — inclui `preco_custo` e `estoque_minimo`, nunca expostos ao aluno |
-| `/api/promocoes/` | `GET` | qualquer autenticado | Lista promoções (filtro: `?produto=`) |
-| `/api/promocoes/` | `POST`/`PUT`/`DELETE` | admin | CRUD de promoção — rejeita datas sobrepostas para o mesmo produto |
-| `/api/produtos/mais_vendidos/` | `GET` | admin | Ranking por quantidade vendida (RF12). Query opcionais: `?data_inicio=`, `?data_fim=`, `?limite=` (padrão 10) |
+O módulo `notificacoes` registra avisos destinados aos usuários.
 
-**Importante:** o `ProdutoViewSet` troca de serializer conforme a ação (`ProdutoListSerializer` no `list`, `ProdutoWriteSerializer` no `create`/`update`, `ProdutoDetailSerializer` no resto) — por isso `preco_custo` nunca aparece em nenhuma resposta que o aluno recebe.
+Entre os usos do sistema está a notificação quando um pedido fica pronto para retirada.
 
-### 5.3 Pedidos (`pedidos`)
+## Pedidos
 
-| Endpoint | Método | Quem acessa | Descrição |
-|---|---|---|---|
-| `/api/pedidos/` | `GET` | autenticado | Aluno vê só os próprios; admin vê todos (filtro: `?status=`) |
-| `/api/pedidos/` | `POST` | autenticado | Cria pedido — body: `{"itens_criacao": [{"produto": id, "quantidade": n}, ...]}` |
-| `/api/pedidos/{id}/` | `GET` | dono do pedido ou admin | Detalhe com itens e total |
-| `/api/pedidos/{id}/alterar_status/` | `PATCH` | admin | Body: `{"status": "confirmado"}` — respeita a máquina de estados (RN04) |
-| `/api/pedidos/{id}/qrcode/` | `GET` | dono do pedido ou admin | Retorna `{"codigo_retirada": "...", "qrcode_base64": "data:image/png;base64,..."}` |
-| `/api/pedidos/retirar_via_qrcode/` | `POST` | admin | Body: `{"codigo_retirada": "..."}` — só funciona se o pedido estiver "pronto" |
-| `/api/pedidos/relatorio_vendas/` | `GET` | admin | Query: `?data_inicio=YYYY-MM-DD&data_fim=YYYY-MM-DD` — soma vendas de pedidos retirados no período |
+O módulo `pedidos` concentra:
 
-**Máquina de estados do pedido (RN04):**
+- criação do pedido;
+- itens;
+- cálculo de total;
+- estoque;
+- status;
+- cancelamento;
+- pagamentos;
+- Mercado Pago;
+- QR Code;
+- retirada;
+- relatórios.
 
+## Fluxo do pedido
+
+Fluxo principal:
+
+```text
+pendente
+   ↓
+confirmado
+   ↓
+pronto
+   ↓
+retirado
 ```
-pendente → confirmado → pronto → retirado
-   ↓            ↓          ↓
-cancelado   cancelado  cancelado
-```
-Qualquer tentativa de pular etapa (ex: `pendente` → `pronto` direto) é rejeitada com erro 400.
 
-### 5.4 Notificações (`notificacoes`)
+Cancelamentos podem ocorrer antes da retirada, respeitando as regras de negócio e a conciliação financeira.
 
-| Endpoint | Método | Quem acessa | Descrição |
-|---|---|---|---|
-| `/api/notificacoes/` | `GET` | autenticado | Lista as próprias notificações (filtro: `?lida=false`) |
-| `/api/notificacoes/{id}/marcar_lida/` | `PATCH` | autenticado (dono) | Marca uma notificação como lida |
-| `/api/notificacoes/marcar_todas_lidas/` | `POST` | autenticado | Marca todas como lidas de uma vez |
+O sistema impede transições inválidas entre estados.
 
-Notificações são só leitura pela API — são criadas automaticamente pelo sistema (nunca pelo aluno ou admin diretamente), no momento em que um pedido passa para "pronto".
+## Estoque
 
----
+A lógica de estoque é tratada no backend.
 
-## 6. Regras de negócio implementadas (e onde estão no código)
+Entre as regras implementadas:
 
-| Regra | O que faz | Onde está |
-|---|---|---|
-| RN02 | Baixa automática de estoque ao criar o pedido | `PedidoSerializer.create()` |
-| RN03 | Impede reservar produto sem estoque suficiente | `PedidoSerializer.validate_itens_criacao()` |
-| RN04 | Só permite as transições de status previstas | `Pedido.pode_transicionar_para()` + `PedidoStatusUpdateSerializer` |
-| RN05 | Só admin cadastra/edita promoção | `IsAdminOrReadOnly` (permissão) |
-| RN06 | Cancela automaticamente pedido "pronto" há mais de X min, devolve estoque | comando `cancelar_pedidos_expirados` |
-| RN07 | Pedido confirmado não pode ter itens alterados | não existe endpoint de editar itens após criação (garantido por ausência de funcionalidade, não por validação explícita) |
+- baixa de estoque ao criar/reservar um pedido;
+- validação de estoque suficiente;
+- devolução de estoque em cancelamentos aplicáveis;
+- proteção contra alteração indevida pelo frontend.
 
-### QR Code de retirada
-Cada pedido nasce com um `codigo_retirada` (UUID) — não é sequencial de propósito, pra ninguém adivinhar o código de outro aluno. O QR Code é gerado sob demanda (`/qrcode/`, biblioteca `qrcode`), nunca salvo como arquivo. A retirada (`/retirar_via_qrcode/`) reaproveita a mesma validação de transição de status da RN04, então só libera se o pedido estiver "pronto".
+## Cancelamento automático
 
-### Notificação de pedido pronto
-Implementada via **Django Signal** (`pedidos/signals.py` → `pedido_ficou_pronto`), disparado dentro de `PedidoStatusUpdateSerializer.save()` quando o status muda para "pronto". O app `notificacoes` escuta esse signal (`notificacoes/receivers.py`) e cria o registro. É notificação "em app" via polling (o frontend consulta `GET /api/notificacoes/?lida=false` periodicamente) — não é push de verdade, porque isso exigiria Service Worker + Celery/Redis ou Django Channels, fora do escopo atual.
-
----
-
-## 7. Comandos de management
-
-| Comando | O que faz |
-|---|---|
-| `python manage.py seed_dados` | Popula categorias, produtos, promoções, usuários e pedidos de exemplo. Idempotente. Aceita `--limpar` |
-| `python manage.py cancelar_pedidos_expirados` | RN06 — cancela pedidos "prontos" vencidos e devolve estoque. Pensado pra rodar via Cron Job periódico em produção (ainda não configurado — ver backlog) |
-| `python manage.py graph_models -S -g -o core.png core` | Gera um diagrama automático dos models (roda sozinho depois de todo `pdm migrate`, configurado como `post_migrate` no `pyproject.toml`) |
-
----
-
-## 8. Testes automatizados
+Existe o management command:
 
 ```bash
+python manage.py cancelar_pedidos_expirados
+```
+
+Ele trata pedidos que ultrapassam o limite configurado para retirada.
+
+Variável relacionada:
+
+```env
+PEDIDO_TEMPO_LIMITE_RETIRADA_MINUTOS=
+```
+
+## QR Code de retirada
+
+Cada pedido possui um código de retirada.
+
+O cliente pode visualizar o QR Code e a administração pode confirmar a retirada por leitura da câmera ou entrada manual.
+
+A retirada só deve ser concluída quando o pedido estiver em estado compatível.
+
+## Pagamentos
+
+O checkout suporta:
+
+- dinheiro na retirada;
+- Pix;
+- cartão.
+
+Os pagamentos eletrônicos utilizam o Mercado Pago Orders API.
+
+### Responsabilidades
+
+Frontend:
+
+```text
+Public Key
+Payment Brick
+interface do checkout
+```
+
+Backend:
+
+```text
+Access Token
+criação da Order
+validação do pagamento
+webhook
+conciliação
+status financeiro
+```
+
+Nunca confie em preço ou status financeiro enviados pelo frontend.
+
+## Mercado Pago
+
+Variáveis essenciais:
+
+```env
+MERCADO_PAGO_ACCESS_TOKEN=
+MERCADO_PAGO_WEBHOOK_SECRET=
+MERCADO_PAGO_WEBHOOK_URL=
+MERCADO_PAGO_API_BASE_URL=https://api.mercadopago.com
+MERCADO_PAGO_TIMEOUT_SECONDS=15
+MERCADO_PAGO_SANDBOX=False
+PAGAMENTO_TEMPO_LIMITE_MINUTOS=45
+```
+
+Em produção:
+
+```env
+MERCADO_PAGO_SANDBOX=False
+```
+
+A Public Key do frontend e o Access Token do backend devem pertencer à mesma aplicação Mercado Pago.
+
+### Pix em produção
+
+A conta Mercado Pago vinculada à aplicação deve possuir uma chave Pix cadastrada e ativa.
+
+Sem chave Pix, a criação da transação pode falhar mesmo que Access Token, Public Key e Webhook estejam corretos.
+
+## Webhook Mercado Pago
+
+Endpoint:
+
+```text
+POST /api/pedidos/mercado_pago_webhook/
+```
+
+Evento configurado:
+
+```text
+Order (Mercado Pago)
+```
+
+URL de produção:
+
+```text
+https://backend-pires.class.fabricadesoftware.ifc.edu.br/api/pedidos/mercado_pago_webhook/
+```
+
+O webhook deve responder `200` depois de receber e tratar corretamente a notificação.
+
+Um `200` no webhook significa que a notificação foi recebida. Não significa, por si só, que o pagamento foi aprovado. Eventos como `order.failed` também podem ser entregues com sucesso ao webhook.
+
+Em produção, assinaturas HMAC inválidas devem ser rejeitadas.
+
+## Variáveis de ambiente de produção
+
+Exemplo para o Fabroku:
+
+```env
+DEBUG=False
+SECRET_KEY=<SEGREDO_FORTE_E_NOVO>
+
+ALLOWED_HOSTS=backend-pires.class.fabricadesoftware.ifc.edu.br
+FRONTEND_URLS=https://frontend-pires.vercel.app
+
+DATABASE_URL=<POSTGRES_PRODUCAO>
+CLOUDINARY_URL=<CLOUDINARY_PRODUCAO>
+
+GOOGLE_CLIENT_ID=<CLIENT_ID_WEB>
+
+EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+EMAIL_HOST=smtp.gmail.com
+EMAIL_PORT=587
+EMAIL_HOST_USER=<EMAIL>
+EMAIL_HOST_PASSWORD=<SENHA_DE_APP>
+EMAIL_USE_TLS=True
+EMAIL_TIMEOUT=10
+DEFAULT_FROM_EMAIL=Pires Panificadora <EMAIL_VALIDO>
+
+MERCADO_PAGO_ACCESS_TOKEN=<ACCESS_TOKEN_PRODUCAO>
+MERCADO_PAGO_WEBHOOK_SECRET=<SECRET_WEBHOOK_PRODUCAO>
+MERCADO_PAGO_WEBHOOK_URL=https://backend-pires.class.fabricadesoftware.ifc.edu.br/api/pedidos/mercado_pago_webhook/
+MERCADO_PAGO_API_BASE_URL=https://api.mercadopago.com
+MERCADO_PAGO_TIMEOUT_SECONDS=15
+MERCADO_PAGO_SANDBOX=False
+
+PAGAMENTO_TEMPO_LIMITE_MINUTOS=45
+PEDIDO_TEMPO_LIMITE_RETIRADA_MINUTOS=15
+
+VERIFICATION_CODE_TTL_MINUTES=10
+VERIFICATION_MAX_ATTEMPTS=5
+VERIFICATION_RESEND_COOLDOWN_SECONDS=60
+```
+
+Nunca versione valores reais de:
+
+- `SECRET_KEY`;
+- `DATABASE_URL`;
+- `CLOUDINARY_URL`;
+- senha SMTP;
+- Access Token;
+- Webhook Secret.
+
+## Configuração de produção
+
+O projeto está preparado para operar atrás de proxy HTTPS, incluindo:
+
+- `SECURE_PROXY_SSL_HEADER`;
+- cookies seguros quando `DEBUG=False`;
+- CORS e CSRF por origem permitida;
+- `STATIC_ROOT`;
+- WhiteNoise;
+- Cloudinary quando configurado;
+- banco via `DATABASE_URL`.
+
+## Deploy
+
+Antes do deploy:
+
+```bash
+pdm run python manage.py check
+pdm run python manage.py makemigrations --check
 pdm run python manage.py test
 ```
 
-41 testes cobrindo: RN02 (baixa de estoque), RN03 (estoque insuficiente), RN04 (todas as transições de status válidas/inválidas), RN05 (permissão de promoção), RN06 (cancelamento automático + devolução de estoque), congelamento de preço no pedido, QR Code (gerar/retirar/retirar duas vezes/código inválido), notificação automática ao ficar pronto (e não duplicar), permissões (aluno não vê pedido/notificação de outro, não altera status, não cadastra produto/promoção), sobreposição de datas em promoção, `preco_custo` nunca aparecendo pro aluno, e os relatórios RF11/RF12 (cálculo correto, exige admin, período vazio não quebra).
+Durante o deploy, devem ocorrer as etapas equivalentes a:
 
-Organizados em `pedidos/tests/` (`test_regras_negocio.py`, `test_qrcode_e_notificacao.py`, `test_rn06_cancelamento.py`, `test_relatorios.py`, com um `base.py` compartilhado) e `catalogo/tests.py`.
-
-## 9. O que falta (visão rápida — detalhes no backlog de issues)
-
-O núcleo funcional do backend está fechado: todas as regras de negócio da documentação (RN02–RN07) e todos os requisitos funcionais de relatório (RF11, RF12) estão implementados e testados. O que resta é **infraestrutura**, não lógica de negócio:
-
-- Configuração real do Cloudinary em produção
-- Deploy no Render (banco Postgres, variáveis de ambiente)
-- Cron Job de produção pro `cancelar_pedidos_expirados` (o comando existe e funciona, só falta agendá-lo)
-- Frontend (Vue) — ainda não iniciado, já existe protótipo visual de referência
-
----
-
-## 10. Referência rápida de todos os endpoints
-
-```
-Autenticação
-  POST   /api/registro/
-  POST   /api/token/
-  POST   /api/token/refresh/
-  POST   /api/token/verify/
-
-Usuários
-  GET    /api/usuarios/
-  GET    /api/usuarios/{id}/
-
-Catálogo
-  GET    /api/categorias/
-  POST   /api/categorias/                        [admin]
-  GET    /api/produtos/
-  POST   /api/produtos/                           [admin]
-  GET    /api/produtos/mais_vendidos/              [admin]
-  GET    /api/promocoes/
-  POST   /api/promocoes/                          [admin]
-
-Pedidos
-  GET    /api/pedidos/
-  POST   /api/pedidos/
-  GET    /api/pedidos/{id}/
-  PATCH  /api/pedidos/{id}/alterar_status/        [admin]
-  GET    /api/pedidos/{id}/qrcode/
-  POST   /api/pedidos/retirar_via_qrcode/         [admin]
-  GET    /api/pedidos/relatorio_vendas/           [admin]
-
-Notificações
-  GET    /api/notificacoes/
-  PATCH  /api/notificacoes/{id}/marcar_lida/
-  POST   /api/notificacoes/marcar_todas_lidas/
+```bash
+python manage.py migrate
+python manage.py collectstatic --noinput
+gunicorn app.wsgi
 ```
 
-Lista completa e interativa sempre disponível em `/api/doc/`.
+Use os comandos configurados na plataforma quando aplicável.
+
+O repositório também contém:
+
+```text
+Procfile
+build.sh
+runtime.txt
+```
+
+para suportar o processo de publicação.
+
+## Preflight
+
+Antes de uma entrega ou nova versão, valide:
+
+```text
+Django check
+migrations --check
+testes automatizados
+build do frontend
+```
+
+O projeto deve ir para produção somente depois dessas etapas passarem.
+
+## Smoke test de produção
+
+Depois do deploy, valide:
+
+1. API responde em HTTPS;
+2. login comum;
+3. refresh JWT;
+4. login Google;
+5. catálogo;
+6. promoções;
+7. favoritos;
+8. upload de imagem;
+9. envio de e-mail;
+10. criação de pedido;
+11. dinheiro na retirada;
+12. Pix;
+13. cartão;
+14. webhook retorna `200`;
+15. pedido muda para confirmado após pagamento aprovado;
+16. administração altera o pedido para pronto;
+17. cliente visualiza QR Code;
+18. admin confirma retirada;
+19. cancelamento devolve estoque quando aplicável;
+20. logs não exibem segredos.
+
+## Fluxo completo de pagamento online
+
+```text
+Cliente
+  ↓
+Frontend
+  ↓
+Backend
+  ↓
+Mercado Pago
+  ↓
+Order / pagamento
+  ↓
+Webhook
+  ↓
+Backend valida o evento
+  ↓
+Pagamento aprovado
+  ↓
+Pedido confirmado
+```
+
+## Fluxo completo de retirada
+
+```text
+Pedido confirmado
+  ↓
+Admin prepara
+  ↓
+Pronto
+  ↓
+Cliente recebe QR Code
+  ↓
+Admin escaneia
+  ↓
+Retirado
+```
+
+## Segurança
+
+Regras essenciais:
+
+- `DEBUG=False` em produção;
+- não confiar em preços enviados pelo frontend;
+- não confiar em status financeiro enviado pelo frontend;
+- não expor Access Token;
+- não expor Webhook Secret;
+- não logar tokens e segredos;
+- restringir `ALLOWED_HOSTS`;
+- restringir `FRONTEND_URLS`;
+- usar HTTPS;
+- armazenar mídia em serviço persistente;
+- utilizar PostgreSQL em produção;
+- manter backups do banco e da mídia;
+- rejeitar assinatura inválida no webhook de produção;
+- rotacionar credenciais que tenham sido expostas em logs ou arquivos compartilhados.
+
+## Estado atual
+
+O núcleo funcional está concluído e o sistema possui ambiente de produção configurado.
+
+A aplicação está preparada para operação com:
+
+- frontend na Vercel;
+- backend no Fabroku;
+- PostgreSQL;
+- Cloudinary;
+- autenticação JWT e Google;
+- Mercado Pago em produção;
+- Webhook de Orders;
+- Pix;
+- cartão;
+- retirada por QR Code.
+
+Alterações futuras devem ser submetidas novamente ao preflight e ao smoke test antes de publicação.
