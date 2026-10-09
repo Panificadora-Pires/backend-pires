@@ -2,6 +2,7 @@
 
 import hashlib
 import hmac
+import logging
 from datetime import timedelta
 from decimal import Decimal
 
@@ -12,6 +13,9 @@ from django.utils import timezone
 
 from pedidos.models import Pedido
 from pedidos.services.pedido import devolver_estoque_pedido
+
+
+logger = logging.getLogger(__name__)
 
 
 class MercadoPagoError(Exception):
@@ -473,24 +477,52 @@ def prazo_pagamento():
 
 
 def validar_assinatura_webhook(*, x_signature, x_request_id, data_id):
-    """Valida x-signature conforme o manifesto HMAC do Mercado Pago."""
+    """Valida x-signature conforme o manifesto HMAC do Mercado Pago.
 
-    secret = settings.MERCADO_PAGO_WEBHOOK_SECRET
-    if not secret or not x_signature:
+    Os logs abaixo registram somente presença/ausência dos componentes
+    necessários. Nenhum secret, hash ou assinatura é gravado.
+    """
+
+    secret = str(settings.MERCADO_PAGO_WEBHOOK_SECRET or '').strip()
+    x_signature = str(x_signature or '').strip()
+    x_request_id = str(x_request_id or '').strip()
+    data_id = str(data_id or '').strip()
+
+    def rejeitar(motivo):
+        logger.warning(
+            (
+                'Mercado Pago webhook rejeitado: motivo=%s '
+                'secret_configured=%s signature_present=%s '
+                'request_id_present=%s data_id_present=%s'
+            ),
+            motivo,
+            bool(secret),
+            bool(x_signature),
+            bool(x_request_id),
+            bool(data_id),
+        )
         return False
+
+    if not secret:
+        return rejeitar('secret_missing')
+    if not x_signature:
+        return rejeitar('signature_missing')
 
     partes = {}
     for parte in x_signature.split(','):
         chave, separador, valor = parte.partition('=')
         if separador:
-            partes[chave.strip()] = valor.strip()
+            partes[chave.strip().lower()] = valor.strip()
 
     timestamp = partes.get('ts')
     assinatura = partes.get('v1')
-    if not timestamp or not assinatura:
-        return False
+    if not timestamp:
+        return rejeitar('timestamp_missing')
+    if not assinatura:
+        return rejeitar('v1_missing')
 
-    data_id = str(data_id or '')
+    # Para Order IDs alfanuméricos, a documentação do Mercado Pago exige
+    # lowercase no manifesto usado para validar a assinatura.
     if data_id.isalnum():
         data_id = data_id.lower()
 
@@ -502,9 +534,13 @@ def validar_assinatura_webhook(*, x_signature, x_request_id, data_id):
     manifest_parts.append(f'ts:{timestamp};')
 
     esperado = hmac.new(
-        secret.encode(),
-        ''.join(manifest_parts).encode(),
+        secret.encode('utf-8'),
+        ''.join(manifest_parts).encode('utf-8'),
         hashlib.sha256,
     ).hexdigest()
 
-    return hmac.compare_digest(esperado, assinatura)
+    valido = hmac.compare_digest(esperado, assinatura.lower())
+    if not valido:
+        return rejeitar('hmac_mismatch')
+
+    return True
