@@ -521,11 +521,8 @@ def validar_assinatura_webhook(*, x_signature, x_request_id, data_id):
     if not assinatura:
         return rejeitar('v1_missing')
 
-    # Para Order IDs alfanuméricos, a documentação do Mercado Pago exige
-    # lowercase no manifesto usado para validar a assinatura.
-    if data_id.isalnum():
-        data_id = data_id.lower()
-
+    # Preserve exatamente o case recebido em data.id.
+    # Orders usam IDs alfanuméricos e a assinatura é sensível a maiúsculas/minúsculas.
     manifest_parts = []
     if data_id:
         manifest_parts.append(f'id:{data_id};')
