@@ -1,0 +1,47 @@
+name: Expirar pedidos
+
+# Chama o endpoint de manutenção da API a cada 10 minutos para cancelar pedidos prontos não retirados,
+# checkouts online sem pagamento e (se configurado) pedidos confirmados parados.
+#
+# Secrets necessários no repositório (Settings > Secrets and variables > Actions):
+#   BACKEND_URL        ex.: https://backend-pires.class.fabricadesoftware.ifc.edu.br
+#   MANUTENCAO_TOKEN   mesmo valor da variável MANUTENCAO_TOKEN configurada no servidor
+#
+# Observação: agendamentos do GitHub podem atrasar alguns minutos em horários de pico.
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: expirar-pedidos
+  cancel-in-progress: false
+
+jobs:
+  expirar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verificar configuração
+        env:
+          BACKEND_URL: ${{ secrets.BACKEND_URL }}
+          MANUTENCAO_TOKEN: ${{ secrets.MANUTENCAO_TOKEN }}
+        run: |
+          if [ -z "$BACKEND_URL" ] || [ -z "$MANUTENCAO_TOKEN" ]; then
+            echo "Defina os secrets BACKEND_URL e MANUTENCAO_TOKEN para ativar a expiração automática."
+            exit 1
+          fi
+
+      - name: Executar expiração
+        env:
+          BACKEND_URL: ${{ secrets.BACKEND_URL }}
+          MANUTENCAO_TOKEN: ${{ secrets.MANUTENCAO_TOKEN }}
+        run: |
+          curl --fail-with-body --silent --show-error \
+            --retry 3 --retry-delay 10 --max-time 120 \
+            -X POST \
+            -H "X-Manutencao-Token: ${MANUTENCAO_TOKEN}" \
+            "${BACKEND_URL%/}/api/manutencao/expirar-pedidos/"
