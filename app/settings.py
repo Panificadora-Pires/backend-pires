@@ -74,7 +74,8 @@ FRONTEND_URLS = env_list(
 
 CORS_ALLOWED_ORIGINS = FRONTEND_URLS
 CSRF_TRUSTED_ORIGINS = FRONTEND_URLS
-CORS_ALLOW_CREDENTIALS = True
+# A API usa JWT em header Authorization; não depende de cookies entre origens.
+CORS_ALLOW_CREDENTIALS = False
 
 
 SECURE_PROXY_SSL_HEADER = (
@@ -84,12 +85,25 @@ SECURE_PROXY_SSL_HEADER = (
 
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
+SESSION_COOKIE_HTTPONLY = True
 
 SESSION_COOKIE_SAMESITE = 'Lax'
 CSRF_COOKIE_SAMESITE = 'Lax'
 
 SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_REFERRER_POLICY = 'same-origin'
+SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin'
 X_FRAME_OPTIONS = 'DENY'
+
+# Opcionais: ative no servidor depois de confirmar que o proxy HTTPS envia X-Forwarded-Proto.
+SECURE_SSL_REDIRECT = env_bool('SECURE_SSL_REDIRECT', False)
+SECURE_HSTS_SECONDS = int(os.getenv('SECURE_HSTS_SECONDS', '0'))
+SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool('SECURE_HSTS_INCLUDE_SUBDOMAINS', False)
+SECURE_HSTS_PRELOAD = env_bool('SECURE_HSTS_PRELOAD', False)
+
+# Documentação interativa (Swagger/ReDoc/schema). Em produção fica desligada, a menos que
+# ENABLE_API_DOCS=True. Em desenvolvimento (DEBUG=True) fica ligada.
+ENABLE_API_DOCS = env_bool('ENABLE_API_DOCS', DEBUG)
 
 
 PEDIDO_TEMPO_LIMITE_RETIRADA_MINUTOS = int(
@@ -98,6 +112,24 @@ PEDIDO_TEMPO_LIMITE_RETIRADA_MINUTOS = int(
         '15',
     )
 )
+
+# Cancela (e reembolsa, se pago online) pedidos "confirmados" que ninguém preparou após N horas.
+# 0 desliga a regra.
+PEDIDO_TEMPO_LIMITE_PREPARO_HORAS = int(
+    os.getenv(
+        'PEDIDO_TEMPO_LIMITE_PREPARO_HORAS',
+        '0',
+    )
+)
+
+# Proteção contra abuso de reserva de estoque.
+PEDIDO_QUANTIDADE_MAXIMA_POR_ITEM = int(os.getenv('PEDIDO_QUANTIDADE_MAXIMA_POR_ITEM', '50'))
+PEDIDO_MAXIMO_ITENS_DIFERENTES = int(os.getenv('PEDIDO_MAXIMO_ITENS_DIFERENTES', '30'))
+PEDIDO_MAXIMO_PENDENTES_POR_USUARIO = int(os.getenv('PEDIDO_MAXIMO_PENDENTES_POR_USUARIO', '5'))
+
+# Token para o agendador externo chamar POST /api/manutencao/expirar-pedidos/.
+# Sem valor, o endpoint fica desativado.
+MANUTENCAO_TOKEN = os.getenv('MANUTENCAO_TOKEN', '').strip()
 
 
 CLOUDINARY_URL = os.getenv(
@@ -379,11 +411,23 @@ REST_FRAMEWORK = {
             'authentication.JWTAuthentication'
         ),
     ),
+    # Negado por padrão: toda view que precisa de acesso anônimo declara AllowAny explicitamente.
     'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+    ),
+    # Sem Browsable API em produção: respostas somente em JSON.
+    'DEFAULT_RENDERER_CLASSES': (
         (
-            'rest_framework.permissions.'
-            'DjangoModelPermissionsOrAnonReadOnly'
-        ),
+            'rest_framework.renderers.JSONRenderer',
+            'rest_framework.renderers.BrowsableAPIRenderer',
+        )
+        if DEBUG
+        else ('rest_framework.renderers.JSONRenderer',)
+    ),
+    'DEFAULT_THROTTLE_CLASSES': (
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+        'rest_framework.throttling.ScopedRateThrottle',
     ),
     'DEFAULT_FILTER_BACKENDS': (
         (
@@ -399,6 +443,11 @@ REST_FRAMEWORK = {
     ),
     'PAGE_SIZE': 10,
     'DEFAULT_THROTTLE_RATES': {
+        # Limites gerais. O usuário logado precisa de folga para o painel que atualiza sozinho.
+        'anon': os.getenv('THROTTLE_ANON', '300/hour'),
+        'user': os.getenv('THROTTLE_USER', '6000/hour'),
+        'manutencao': '60/hour',
+        'health': '600/hour',
         'login': '60/hour',
         'logout': '60/hour',
         'google_login': '60/hour',

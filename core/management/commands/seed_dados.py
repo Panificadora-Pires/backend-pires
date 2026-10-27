@@ -9,7 +9,8 @@ Uso:
 
 from datetime import date, timedelta
 
-from django.core.management.base import BaseCommand
+from django.conf import settings
+from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
 from catalogo.models import Categoria, Produto, Promocao
@@ -24,12 +25,23 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument(
+            '--permitir-producao',
+            action='store_true',
+            help='Permite rodar com DEBUG=False. NUNCA use em produção: cria um admin com senha conhecida.',
+        )
+        parser.add_argument(
             '--limpar',
             action='store_true',
             help='Remove os dados de exemplo criados por este comando antes de recriar.',
         )
 
     def handle(self, *args, **options):
+        if not settings.DEBUG and not options['permitir_producao']:
+            raise CommandError(
+                'seed_dados cria um administrador com senha conhecida e só pode rodar com DEBUG=True. '
+                'Use --permitir-producao apenas em um ambiente descartável.'
+            )
+
         if options['limpar']:
             self._limpar()
 
