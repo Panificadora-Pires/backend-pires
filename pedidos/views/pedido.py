@@ -266,6 +266,7 @@ class PedidoViewSet(
         methods=['post'],
         permission_classes=[AllowAny],
         authentication_classes=[],
+        throttle_classes=[],
     )
     def mercado_pago_webhook(self, request):
         data_id_query = request.query_params.get('data.id')

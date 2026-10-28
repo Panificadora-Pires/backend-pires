@@ -1,5 +1,7 @@
 """Operações transacionais de criação e cancelamento de pedidos."""
 
+from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.db.models import F
 from rest_framework import serializers
@@ -11,6 +13,8 @@ from pedidos.models import ItemPedido, Pedido
 @transaction.atomic
 def criar_pedido_reservando_estoque(*, usuario, itens_data, **pedido_kwargs):
     """Cria pedido, congela os preços e reserva estoque sob lock de banco."""
+
+    _validar_limite_de_pedidos_pendentes(usuario)
 
     ids_produtos = [item['produto'].pk for item in itens_data]
 
@@ -80,6 +84,28 @@ def criar_pedido_reservando_estoque(*, usuario, itens_data, **pedido_kwargs):
     ItemPedido.objects.bulk_create(itens_para_criar)
 
     return pedido
+
+
+def _validar_limite_de_pedidos_pendentes(usuario):
+    """Impede que uma única conta reserve estoque demais com pedidos que nunca serão concluídos."""
+
+    limite = settings.PEDIDO_MAXIMO_PENDENTES_POR_USUARIO
+    if limite <= 0:
+        return
+
+    # Serializa as criações de pedido do mesmo usuário para a contagem abaixo ser confiável.
+    get_user_model().objects.select_for_update().get(pk=usuario.pk)
+
+    pendentes = Pedido.objects.filter(usuario=usuario, status=Pedido.Status.PENDENTE).count()
+    if pendentes >= limite:
+        raise serializers.ValidationError(
+            {
+                'detail': (
+                    f'Você já tem {pendentes} pedidos aguardando confirmação. '
+                    'Conclua ou cancele um deles antes de fazer outro.'
+                )
+            }
+        )
 
 
 @transaction.atomic

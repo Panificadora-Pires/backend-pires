@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.utils import timezone
 from rest_framework import serializers
 
@@ -43,10 +44,21 @@ def validar_itens_criacao(itens):
     if not itens:
         raise serializers.ValidationError('O pedido precisa ter ao menos um item.')
 
+    if len(itens) > settings.PEDIDO_MAXIMO_ITENS_DIFERENTES:
+        raise serializers.ValidationError(
+            f'O pedido pode ter no máximo {settings.PEDIDO_MAXIMO_ITENS_DIFERENTES} produtos diferentes.'
+        )
+
     produtos_encontrados = set()
     for item in itens:
         produto = item['produto']
         quantidade = item['quantidade']
+
+        if quantidade > settings.PEDIDO_QUANTIDADE_MAXIMA_POR_ITEM:
+            raise serializers.ValidationError(
+                f'Quantidade máxima por produto: {settings.PEDIDO_QUANTIDADE_MAXIMA_POR_ITEM}. '
+                f'Reduza "{produto.nome}" ou fale com a padaria.'
+            )
 
         if produto.pk in produtos_encontrados:
             raise serializers.ValidationError(

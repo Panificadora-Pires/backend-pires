@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib import admin
 from django.urls import include, path
 from drf_spectacular.views import (
@@ -29,7 +30,7 @@ from core.views import (
 )
 from favoritos.views import FavoritoViewSet
 from notificacoes.views import NotificacaoViewSet
-from pedidos.views import PedidoViewSet
+from pedidos.views import ExpirarPedidosView, HealthView, PedidoViewSet
 
 router = DefaultRouter()
 
@@ -49,19 +50,14 @@ urlpatterns = [
     path('admin/', admin.site.urls),
 
     path(
-        'api/schema/',
-        SpectacularAPIView.as_view(),
-        name='schema',
+        'api/health/',
+        HealthView.as_view(),
+        name='health',
     ),
     path(
-        'api/doc/',
-        SpectacularSwaggerView.as_view(url_name='schema'),
-        name='swagger-ui',
-    ),
-    path(
-        'api/redoc/',
-        SpectacularRedocView.as_view(url_name='schema'),
-        name='redoc',
+        'api/manutencao/expirar-pedidos/',
+        ExpirarPedidosView.as_view(),
+        name='manutencao_expirar_pedidos',
     ),
 
     path(
@@ -130,3 +126,23 @@ urlpatterns = [
 
     path('api/', include(router.urls)),
 ]
+
+
+if settings.ENABLE_API_DOCS:
+    urlpatterns += [
+        path(
+            'api/schema/',
+            SpectacularAPIView.as_view(),
+            name='schema',
+        ),
+        path(
+            'api/doc/',
+            SpectacularSwaggerView.as_view(url_name='schema'),
+            name='swagger-ui',
+        ),
+        path(
+            'api/redoc/',
+            SpectacularRedocView.as_view(url_name='schema'),
+            name='redoc',
+        ),
+    ]
