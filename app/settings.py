@@ -131,6 +131,10 @@ PEDIDO_MAXIMO_PENDENTES_POR_USUARIO = int(os.getenv('PEDIDO_MAXIMO_PENDENTES_POR
 # Sem valor, o endpoint fica desativado.
 MANUTENCAO_TOKEN = os.getenv('MANUTENCAO_TOKEN', '').strip()
 
+# Chat por pedido: por quantas horas após `retirado`/`cancelado` ainda é possível enviar mensagens.
+CHAT_PRAZO_APOS_ENCERRAMENTO_HORAS = int(os.getenv('CHAT_PRAZO_APOS_ENCERRAMENTO_HORAS', '24'))
+CHAT_MENSAGEM_TAMANHO_MAXIMO = int(os.getenv('CHAT_MENSAGEM_TAMANHO_MAXIMO', '1000'))
+
 
 CLOUDINARY_URL = os.getenv(
     'CLOUDINARY_URL',
@@ -255,6 +259,7 @@ INSTALLED_APPS = [
     'pedidos',
     'notificacoes',
     'favoritos',
+    'chat',
 ]
 
 if CLOUDINARY_URL:
@@ -455,6 +460,7 @@ REST_FRAMEWORK = {
         'verification_send': '20/hour',
         'verification_confirm': '60/hour',
         'password_reset': '20/hour',
+        'chat_mensagem': os.getenv('THROTTLE_CHAT_MENSAGEM', '20/min'),
     },
 }
 
