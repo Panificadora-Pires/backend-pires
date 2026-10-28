@@ -44,6 +44,8 @@ O projeto é dividido por domínio:
 app/            → configuração global do Django
 core/           → usuários, autenticação, convites, verificação e permissões
 catalogo/       → categorias, produtos e promoções
+chat/           → chat por pedido entre o cliente e a padaria
+chatbot/        → chatbot de ajuda (regras + FAQ editável)
 favoritos/      → produtos favoritados
 notificacoes/   → notificações dos usuários
 pedidos/        → pedidos, estoque, pagamentos, QR Code e relatórios
@@ -202,6 +204,52 @@ O frontend possui serviço e store próprios para essa funcionalidade, mas a per
 O módulo `notificacoes` registra avisos destinados aos usuários.
 
 Entre os usos do sistema está a notificação quando um pedido fica pronto para retirada.
+
+Também avisa o cliente quando a padaria responde no chat do pedido (no máximo uma notificação não lida por pedido; ela é marcada como lida quando o cliente abre o chat).
+
+## Chat por pedido
+
+O módulo `chat` mantém **uma conversa por pedido** entre o cliente dono do pedido e a administração. A conversa é criada na primeira mensagem. Mensagens são texto puro (sem HTML e sem anexos); o frontend deve exibi-las sempre como texto.
+
+| Método e rota | Quem | O que faz |
+|---|---|---|
+| `GET /api/chat/{pedido_id}/` | dono do pedido ou admin | Mensagens (até as 200 mais recentes), `somente_leitura`, `encerra_em` e `nao_lidas` do leitor |
+| `POST /api/chat/{pedido_id}/mensagens/` | dono do pedido ou admin | Envia `{"texto": "..."}`; throttle `chat_mensagem` |
+| `POST /api/chat/{pedido_id}/marcar_lidas/` | dono do pedido ou admin | Marca como lidas as mensagens do outro lado |
+| `GET /api/chat/nao_lidas/` | logado | `{"total", "por_pedido": [{"pedido", "nao_lidas"}]}`; o cliente vê só os próprios pedidos e o admin vê todos |
+
+Regras:
+
+- Cliente que tenta acessar o chat de outro pedido recebe 404.
+- Autor e lado da conversa (`enviada_pela_padaria`) vêm do servidor, nunca do corpo. A resposta não expõe e-mail nem nome do autor.
+- Texto obrigatório, sem caracteres de controle (exceto quebra de linha), com até `CHAT_MENSAGEM_TAMANHO_MAXIMO` caracteres (padrão 1000).
+- Depois de `retirado` ou `cancelado`, o chat aceita mensagens por mais `CHAT_PRAZO_APOS_ENCERRAMENTO_HORAS` (padrão 24 h) e então fica somente leitura (envio responde 400).
+- Mensagem da padaria dispara o signal `chat.signals.mensagem_da_padaria_enviada`, que o app `notificacoes` usa para avisar o cliente.
+
+## Chatbot de ajuda
+
+O módulo `chatbot` responde dúvidas comuns por **regras + FAQ**, sem IA externa. Nada da conversa é gravado.
+
+| Método e rota | O que faz |
+|---|---|
+| `GET /api/chatbot/inicio/` | Saudação e botões com os assuntos sugeridos |
+| `POST /api/chatbot/mensagem/` | `{"texto": "..."}` (até 300 caracteres) ou `{"intencao": "retirada"}` (botão); throttle `chatbot` |
+
+Toda resposta tem o formato `{intencao, texto, acoes, pedidos, produtos}`. Cada ação é um destes tipos:
+
+- `{tipo: "intencao", rotulo, valor}`: próximo assunto;
+- `{tipo: "chat", rotulo, pedido}`: abre o chat do pedido;
+- `{tipo: "rota", rotulo, rota}`: leva a `cardapio` ou `pedidos`.
+
+Como funciona:
+
+- **FAQ editável no admin** (`PerguntaFrequente`): pergunta (texto do botão), palavras-chave, resposta, ordem, sugerida e ativa. As palavras-chave não diferenciam maiúsculas nem acentos; `*` no fim aceita variações (`cancel*`). A resposta aceita `{minutos_retirada}` e `{minutos_pagamento}`, preenchidos com os prazos configurados. A FAQ inicial vem da migration `chatbot.0002_faq_inicial`.
+- **Intenções com dados do usuário:**
+  - `meus_pedidos`: status dos pedidos **do próprio usuário**;
+  - `falar_com_padaria`: botões para o chat dos pedidos com conversa aberta;
+  - `disponibilidade`: se o produto citado está disponível ou esgotado, sem revelar a quantidade em estoque.
+- Ganha a intenção com mais palavras-chave encontradas; em empate, vale a FAQ. Sem correspondência, a resposta é o `fallback` com sugestões.
+- **Plugar IA depois:** crie uma subclasse de `chatbot.services.provedores.ProvedorResposta` que devolva `Resposta` e aponte `CHATBOT_PROVEDOR` para ela.
 
 ## Pedidos
 
@@ -397,6 +445,13 @@ PEDIDO_TEMPO_LIMITE_RETIRADA_MINUTOS=15
 VERIFICATION_CODE_TTL_MINUTES=10
 VERIFICATION_MAX_ATTEMPTS=5
 VERIFICATION_RESEND_COOLDOWN_SECONDS=60
+
+CHAT_PRAZO_APOS_ENCERRAMENTO_HORAS=24
+CHAT_MENSAGEM_TAMANHO_MAXIMO=1000
+THROTTLE_CHAT_MENSAGEM=20/min
+
+CHATBOT_PROVEDOR=chatbot.services.regras.ProvedorRegras
+THROTTLE_CHATBOT=30/min
 ```
 
 Nunca versione valores reais de:

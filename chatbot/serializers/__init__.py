@@ -1,0 +1,1 @@
+from .mensagem import ChatbotMensagemSerializer

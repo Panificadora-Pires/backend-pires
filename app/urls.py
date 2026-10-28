@@ -13,6 +13,8 @@ from catalogo.views import (
     ProdutoViewSet,
     PromocaoViewSet,
 )
+from chat.views import ChatPedidoViewSet
+from chatbot.views import ChatbotViewSet
 from core.views import (
     AccountActivationConfirmView,
     AccountActivationResendView,
@@ -45,6 +47,8 @@ router.register(
     NotificacaoViewSet,
     basename='notificacoes',
 )
+router.register(r'chat', ChatPedidoViewSet, basename='chat')
+router.register(r'chatbot', ChatbotViewSet, basename='chatbot')
 
 urlpatterns = [
     path('admin/', admin.site.urls),
