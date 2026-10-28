@@ -135,6 +135,10 @@ MANUTENCAO_TOKEN = os.getenv('MANUTENCAO_TOKEN', '').strip()
 CHAT_PRAZO_APOS_ENCERRAMENTO_HORAS = int(os.getenv('CHAT_PRAZO_APOS_ENCERRAMENTO_HORAS', '24'))
 CHAT_MENSAGEM_TAMANHO_MAXIMO = int(os.getenv('CHAT_MENSAGEM_TAMANHO_MAXIMO', '1000'))
 
+# Chatbot de ajuda: classe que responde às perguntas. Troque por outra subclasse de
+# chatbot.services.provedores.ProvedorResposta para plugar uma IA no futuro.
+CHATBOT_PROVEDOR = os.getenv('CHATBOT_PROVEDOR', 'chatbot.services.regras.ProvedorRegras')
+
 
 CLOUDINARY_URL = os.getenv(
     'CLOUDINARY_URL',
@@ -260,6 +264,7 @@ INSTALLED_APPS = [
     'notificacoes',
     'favoritos',
     'chat',
+    'chatbot',
 ]
 
 if CLOUDINARY_URL:
@@ -461,6 +466,7 @@ REST_FRAMEWORK = {
         'verification_confirm': '60/hour',
         'password_reset': '20/hour',
         'chat_mensagem': os.getenv('THROTTLE_CHAT_MENSAGEM', '20/min'),
+        'chatbot': os.getenv('THROTTLE_CHATBOT', '30/min'),
     },
 }
 
