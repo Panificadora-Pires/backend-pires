@@ -119,6 +119,17 @@ ACAO_MEUS_PEDIDOS = acao_intencao('Status do meu pedido', 'meus_pedidos')
 ACAO_FALAR_COM_PADARIA = acao_intencao('Falar com a padaria', 'falar_com_padaria')
 
 
+def texto_status(pedido):
+    aguardando_pagamento_online = (
+        pedido.status == Pedido.Status.PENDENTE
+        and pedido.forma_pagamento != Pedido.FormaPagamento.DINHEIRO
+        and pedido.status_pagamento != Pedido.StatusPagamento.APROVADO
+    )
+    if aguardando_pagamento_online:
+        return 'aguardando a aprovação do pagamento'
+    return TEXTO_STATUS[pedido.status]
+
+
 def resumo_pedido(pedido):
     return {
         'id': pedido.id,
@@ -236,7 +247,7 @@ class ProvedorRegras(ProvedorResposta):
         ativos = list(pedidos.filter(status__in=STATUS_ATIVOS)[:MAXIMO_PEDIDOS])
 
         if ativos:
-            linhas = [f'Pedido #{pedido.id}: {TEXTO_STATUS[pedido.status]}.' for pedido in ativos]
+            linhas = [f'Pedido #{pedido.id}: {texto_status(pedido)}.' for pedido in ativos]
             return Resposta(
                 intencao='meus_pedidos',
                 texto='\n'.join(linhas),
@@ -253,7 +264,7 @@ class ProvedorRegras(ProvedorResposta):
                 intencao='meus_pedidos',
                 texto=(
                     f'Você não tem pedidos em andamento. O último foi o #{ultimo.id}, '
-                    f'{TEXTO_STATUS[ultimo.status]}.'
+                    f'{texto_status(ultimo)}.'
                 ),
                 pedidos=[resumo_pedido(ultimo)],
                 acoes=[acao_rota('Abrir Meus pedidos', 'pedidos'), ACAO_FALAR_COM_PADARIA],
@@ -309,7 +320,10 @@ class ProvedorRegras(ProvedorResposta):
         if not produtos:
             return Resposta(
                 intencao='disponibilidade',
-                texto='Não encontrei esse produto no cardápio de hoje. Confira tudo o que está disponível no cardápio.',
+                texto=(
+                    'Não encontrei esse produto no cardápio. Escreva o nome dele (ex.: coxinha) '
+                    'ou veja tudo o que está disponível no cardápio.'
+                ),
                 acoes=[acao_rota('Ver cardápio', 'cardapio'), ACAO_FALAR_COM_PADARIA],
             )
 

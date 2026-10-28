@@ -201,6 +201,15 @@ class MeusPedidosTestCase(ChatbotBaseTestCase):
         assert [acao['pedido'] for acao in self.acoes_do_tipo(resposta, 'chat')] == [meu.id]
         assert 'pronto' in resposta.data['texto'].lower()
 
+    def test_pix_pendente_aguarda_o_pagamento(self):
+        pedido = self.criar_pedido(self.aluno, Pedido.Status.PENDENTE)
+        pedido.forma_pagamento = Pedido.FormaPagamento.PIX
+        pedido.status_pagamento = Pedido.StatusPagamento.PENDENTE
+        pedido.save()
+
+        texto = self.perguntar(intencao='meus_pedidos').data['texto']
+        assert 'aprovação do pagamento' in texto
+
     def test_sem_pedidos_ativos_mostra_o_ultimo_finalizado(self):
         antigo = self.criar_pedido(self.aluno, Pedido.Status.RETIRADO)
 
