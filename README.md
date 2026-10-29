@@ -171,6 +171,10 @@ O sistema também possui recursos de:
 - perfil;
 - convites administrativos.
 
+No login Google, a URL `picture` do token verificado é guardada em `google_avatar_url`, aceitando somente HTTPS em domínios `googleusercontent.com`. Nenhuma imagem é baixada pelo servidor. O campo de resposta `avatar` mantém o contrato atual: foto enviada pelo usuário tem prioridade; na ausência dela, retorna a foto Google. Contas existentes recebem essa foto no próximo login Google.
+
+A ação `remove_avatar` limpa a foto enviada e a alternativa Google; um novo login Google poderá importar novamente a foto da conta. O campo interno não pode ser alterado pelo PATCH de perfil. A migration aditiva `core.0010_user_google_avatar_url` deve ser aplicada antes de executar o backend atualizado (`python manage.py migrate`); não altera uploads ou dados financeiros existentes.
+
 As rotas protegidas utilizam:
 
 ```http

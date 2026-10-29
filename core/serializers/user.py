@@ -73,6 +73,12 @@ class UserSerializer(serializers.ModelSerializer):
     def get_google_connected(self, obj):
         return bool(obj.google_sub)
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if not data['avatar']:
+            data['avatar'] = instance.google_avatar_url or None
+        return data
+
     def get_has_usable_password(self, obj):
         return obj.has_usable_password()
 
@@ -173,6 +179,7 @@ class UserProfileUpdateSerializer(serializers.ModelSerializer):
 
         if remove_avatar:
             validated_data['avatar'] = None
+            validated_data['google_avatar_url'] = ''
             avatar_enviado = True
 
         instance = super().update(instance, validated_data)

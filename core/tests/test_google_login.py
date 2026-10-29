@@ -8,6 +8,101 @@ from core.tests.base import AuthAPITestCase
 
 
 class GoogleLoginTests(AuthAPITestCase):
+    @patch('core.views.social.id_token.verify_oauth2_token')
+    def test_google_picture_is_available_in_profile(self, verify):
+        payload = self.google_payload()
+        payload['picture'] = 'https://lh3.googleusercontent.com/a/foto-teste'
+        verify.return_value = payload
+
+        response = self.post_google()
+
+        assert response.status_code == status.HTTP_200_OK
+        user = User.objects.get(email='google@example.com')
+        self.client.force_authenticate(user=user)
+        profile = self.client.get(reverse('usuarios-me'))
+        assert profile.data['avatar'] == payload['picture']
+
+    @patch('core.views.social.id_token.verify_oauth2_token')
+    def test_existing_google_user_receives_picture_on_next_login(self, verify):
+        user = User.objects.create_user(
+            email='google@example.com', password=None, google_sub='google-sub-123',
+            email_verified=True, is_active=True,
+        )
+        payload = self.google_payload()
+        payload['picture'] = 'https://lh3.googleusercontent.com/a/atualizada'
+        verify.return_value = payload
+
+        assert self.post_google().status_code == status.HTTP_200_OK
+        user.refresh_from_db()
+        assert user.google_avatar_url == payload['picture']
+
+    @patch('core.views.social.id_token.verify_oauth2_token')
+    def test_google_picture_does_not_replace_uploaded_avatar(self, verify):
+        user = User.objects.create_user(
+            email='google@example.com', password=None, google_sub='google-sub-123',
+            email_verified=True, is_active=True, avatar='usuarios/avatars/manual.png',
+        )
+        payload = self.google_payload()
+        payload['picture'] = 'https://lh3.googleusercontent.com/a/foto-google'
+        verify.return_value = payload
+
+        assert self.post_google().status_code == status.HTTP_200_OK
+        user.refresh_from_db()
+        assert user.avatar.name == 'usuarios/avatars/manual.png'
+        self.client.force_authenticate(user=user)
+        profile = self.client.get(reverse('usuarios-me'))
+        assert profile.data['avatar'] != payload['picture']
+        assert 'manual.png' in profile.data['avatar']
+
+    @patch('core.views.social.id_token.verify_oauth2_token')
+    def test_missing_picture_preserves_previous_google_photo(self, verify):
+        photo = 'https://lh3.googleusercontent.com/a/anterior'
+        user = User.objects.create_user(
+            email='google@example.com', password=None, google_sub='google-sub-123',
+            email_verified=True, is_active=True, google_avatar_url=photo,
+        )
+        verify.return_value = self.google_payload()
+
+        assert self.post_google().status_code == status.HTTP_200_OK
+        user.refresh_from_db()
+        assert user.google_avatar_url == photo
+
+    @patch('core.views.social.id_token.verify_oauth2_token')
+    def test_unsafe_picture_is_ignored_without_blocking_login(self, verify):
+        for picture in (
+            'http://lh3.googleusercontent.com/a/foto',
+            'https://example.com/foto',
+            'https://googleusercontent.com.example.com/foto',
+            'javascript:alert(1)',
+            'https://[',
+            'https://lh3.googleusercontent.com/' + 'a' * 2050,
+        ):
+            with self.subTest(picture=picture[:80]):
+                payload = self.google_payload()
+                payload['picture'] = picture
+                verify.return_value = payload
+                assert self.post_google().status_code == status.HTTP_200_OK
+                user = User.objects.get(email='google@example.com')
+                assert not user.google_avatar_url
+
+    def test_profile_can_remove_google_photo_but_cannot_set_its_url(self):
+        photo = 'https://lh3.googleusercontent.com/a/anterior'
+        user = User.objects.create_user(
+            email='google@example.com', password=None, google_sub='google-sub-123',
+            email_verified=True, is_active=True, google_avatar_url=photo,
+        )
+        self.client.force_authenticate(user=user)
+        injected = self.client.patch(
+            reverse('usuarios-me'), {'google_avatar_url': 'https://example.com/foto'}, format='json',
+        )
+        assert injected.status_code == status.HTTP_200_OK
+        assert injected.data['avatar'] == photo
+        removed = self.client.patch(reverse('usuarios-me'), {'remove_avatar': True}, format='json')
+        assert removed.status_code == status.HTTP_200_OK
+        assert removed.data['avatar'] is None
+        user.refresh_from_db()
+        assert not user.google_avatar_url
+
     def google_payload(
         self,
         *,
