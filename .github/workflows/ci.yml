@@ -43,7 +43,7 @@ jobs:
       - name: Select runner Python and install locked dependencies
         run: |
           pdm use -f "$(command -v python)"
-          pdm sync --frozen-lockfile --prod
+          pdm sync --prod
 
       - name: Django system checks
         run: pdm run python manage.py check
