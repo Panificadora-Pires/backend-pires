@@ -1,0 +1,58 @@
+name: CI Backend
+
+on:
+  pull_request:
+    branches: [dev, main]
+  push:
+    branches: [dev, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-backend-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  django-tests:
+    name: Django checks and tests (Python 3.12)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      DEBUG: 'True'
+      SECRET_KEY: 'ci-only-unsafe-not-for-production'
+      DATABASE_URL: 'sqlite:///db.sqlite3'
+      EMAIL_BACKEND: 'django.core.mail.backends.locmem.EmailBackend'
+      CLOUDINARY_URL: ''
+      GOOGLE_CLIENT_ID: ''
+      MERCADO_PAGO_ACCESS_TOKEN: ''
+      MERCADO_PAGO_WEBHOOK_SECRET: ''
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install PDM
+        run: python -m pip install 'pdm>=2.25,<3'
+
+      - name: Select runner Python and install locked dependencies
+        run: |
+          pdm use -f "$(command -v python)"
+          pdm sync --prod
+
+      - name: Django system checks
+        run: pdm run python manage.py check
+
+      - name: Ensure no missing migrations
+        run: pdm run python manage.py makemigrations --check --dry-run
+
+      - name: Django test suite (temporary SQLite test DB)
+        run: pdm run python manage.py test --noinput --verbosity 1
+
+# Não usa credenciais de produção nem serviços externos.
+# Integração real de OAuth, pagamento e deploy permanece validação separada.

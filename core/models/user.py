@@ -134,6 +134,14 @@ class User(AbstractBaseUser, PermissionsMixin):
         ),
     )
 
+    google_avatar_url = models.URLField(
+        max_length=2048,
+        blank=True,
+        default='',
+        editable=False,
+        verbose_name=_('Foto da conta Google'),
+    )
+
     google_sub = models.CharField(
         max_length=255,
         unique=True,

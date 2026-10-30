@@ -13,6 +13,7 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from core.models import User, VerificationCode
+from core.services.google_profile import atualizar_foto_google
 
 EMISSORES_VALIDOS_GOOGLE = (
     'accounts.google.com',
@@ -275,6 +276,8 @@ class CustomGoogleLoginView(APIView):
                             email_verified=True,
                             is_active=True,
                         )
+
+                atualizar_foto_google(usuario, info.get('picture'))
 
                 VerificationCode.objects.filter(
                     user=usuario,
