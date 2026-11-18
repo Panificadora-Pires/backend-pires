@@ -132,6 +132,15 @@ class PedidoSerializer(serializers.ModelSerializer):
     def validate_itens_criacao(self, itens):
         return validar_itens_criacao(itens)
 
+    def get_fields(self):
+        fields = super().get_fields()
+        usuario = getattr(self.context.get('request'), 'user', None)
+        # Operadores podem validar códigos apresentados pelo cliente,
+        # mas não receber o segredo de retirada na API.
+        if not usuario or not usuario.is_authenticated or usuario.is_staff:
+            fields.pop('codigo_retirada', None)
+        return fields
+
     def create(self, validated_data):
         itens_data = validated_data.pop('itens_criacao')
         return criar_pedido_reservando_estoque(

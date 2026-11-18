@@ -12,6 +12,7 @@ from rest_framework import status as http_status
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.mixins import CreateModelMixin, ListModelMixin, RetrieveModelMixin
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
@@ -93,7 +94,7 @@ class PedidoViewSet(
         pedido.refresh_from_db()
         return Response(
             {
-                'pedido': PedidoSerializer(pedido).data,
+                'pedido': PedidoSerializer(pedido, context=self.get_serializer_context()).data,
                 'pagamento': PagamentoPedidoSerializer(pedido).data,
             },
             status=status_code,
@@ -281,7 +282,7 @@ class PedidoViewSet(
 
         return Response(
             {
-                'pedido': PedidoSerializer(pedido).data,
+                'pedido': PedidoSerializer(pedido, context=self.get_serializer_context()).data,
                 'pagamento': PagamentoPedidoSerializer(pedido).data,
                 'sincronizacao': sincronizacao,
             }
@@ -407,9 +408,12 @@ class PedidoViewSet(
             status=http_status.HTTP_200_OK,
         )
 
-    @extend_schema(summary='Obter QR Code de retirada')
-    @action(detail=True, methods=['get'])
+    @extend_schema(summary='Obter QR Code de retirada do próprio cliente')
+    @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated])
     def qrcode(self, request, pk=None):
+        # Funcionários validam o QR exibido pelo cliente; não recebem o segredo.
+        if request.user.is_staff:
+            raise PermissionDenied('O QR Code de retirada é exclusivo do cliente.')
         pedido = self.get_object()
         conteudo = str(pedido.codigo_retirada)
         return Response(

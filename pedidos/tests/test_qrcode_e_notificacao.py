@@ -23,6 +23,58 @@ class QRCodeRetiradaTestCase(CriaUsuariosEProdutosMixin, APITestCase):
         assert resposta.data['codigo_retirada'] == str(self.pedido.codigo_retirada)
         assert resposta.data['qrcode_base64'].startswith('data:image/png;base64,')
 
+    def test_admin_nao_recebe_codigo_na_lista_nem_no_detalhe(self):
+        self.client.force_authenticate(user=self.admin)
+        for rota in ('/api/pedidos/', f'/api/pedidos/{self.pedido.id}/'):
+            with self.subTest(rota=rota):
+                resposta = self.client.get(rota)
+                self.assertEqual(resposta.status_code, status.HTTP_200_OK)
+                dados = resposta.data['results'][0] if rota.endswith('/') and rota == '/api/pedidos/' else resposta.data
+                self.assertNotIn('codigo_retirada', dados)
+
+    def test_admin_nao_pode_solicitar_qrcode_de_cliente(self):
+        self.client.force_authenticate(user=self.admin)
+        resposta = self.client.get(f'/api/pedidos/{self.pedido.id}/qrcode/')
+        self.assertEqual(resposta.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_outro_cliente_nao_pode_obter_codigo_por_id(self):
+        self.client.force_authenticate(user=self.outro_aluno)
+        resposta = self.client.get(f'/api/pedidos/{self.pedido.id}/qrcode/')
+        self.assertEqual(resposta.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_cliente_recebe_codigo_no_checkout_tradicional(self):
+        self.client.force_authenticate(user=self.aluno)
+        resposta = self.client.post(
+            '/api/pedidos/',
+            {'itens_criacao': [{'produto': self.coxinha.id, 'quantidade': 1}]},
+            format='json',
+        )
+        self.assertEqual(resposta.status_code, status.HTTP_201_CREATED)
+        self.assertIn('codigo_retirada', resposta.data)
+        self.assertTrue(resposta.data['codigo_retirada'])
+
+    def test_aluno_consegue_obter_codigo_no_detalhe(self):
+        self.client.force_authenticate(user=self.aluno)
+        resposta = self.client.get(f'/api/pedidos/{self.pedido.id}/')
+        self.assertEqual(resposta.status_code, status.HTTP_200_OK)
+        self.assertEqual(resposta.data['codigo_retirada'], str(self.pedido.codigo_retirada))
+
+    def test_django_admin_nao_exibe_codigo_em_formulario_ou_busca(self):
+        from pedidos.admin import PedidoAdmin
+        self.assertIn('codigo_retirada', PedidoAdmin.exclude)
+        self.assertNotIn('codigo_retirada', PedidoAdmin.search_fields)
+        self.assertNotIn('codigo_retirada', PedidoAdmin.readonly_fields)
+
+    def test_retirada_admin_nao_devolve_codigo_de_cliente(self):
+        self.client.force_authenticate(user=self.admin)
+        resposta = self.client.post(
+            '/api/pedidos/retirar_via_qrcode/',
+            {'codigo_retirada': str(self.pedido.codigo_retirada)},
+            format='json',
+        )
+        self.assertEqual(resposta.status_code, status.HTTP_200_OK)
+        self.assertNotIn('codigo_retirada', resposta.data)
+
     def test_admin_retira_pedido_pronto(self):
         self.client.force_authenticate(user=self.admin)
         resposta = self.client.post(
