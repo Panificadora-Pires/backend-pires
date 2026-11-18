@@ -10,6 +10,7 @@ from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status as http_status
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
 from rest_framework.mixins import CreateModelMixin, ListModelMixin, RetrieveModelMixin
 from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
@@ -58,11 +59,35 @@ class PedidoViewSet(
             Pedido.objects
             .select_related('usuario')
             .prefetch_related('itens__produto')
-            .order_by('-data')
+            .order_by('-data', '-pk')
         )
-        if usuario.is_staff:
+        if not usuario.is_staff:
+            return queryset.filter(usuario=usuario)
+
+        # Os filtros abaixo servem à listagem administrativa; detalhes,
+        # pagamentos e operações de status não dependem dos filtros da tela.
+        if self.action != 'list':
             return queryset
-        return queryset.filter(usuario=usuario)
+
+        pagamento = self.request.query_params.get('pagamento', '').strip()
+        if pagamento and pagamento not in Pedido.StatusPagamento.values:
+            raise ValidationError({'pagamento': 'Status de pagamento inválido.'})
+        if pagamento:
+            queryset = queryset.filter(status_pagamento=pagamento)
+
+        busca = self.request.query_params.get('busca', '').strip()
+        if len(busca) > 100:
+            raise ValidationError({'busca': 'Use no máximo 100 caracteres.'})
+        if busca:
+            criterio = (
+                Q(usuario__name__icontains=busca)
+                | Q(itens__produto__nome__icontains=busca)
+            )
+            if busca.isdecimal():
+                criterio |= Q(pk=int(busca))
+            queryset = queryset.filter(criterio).distinct()
+
+        return queryset
 
     def _resposta_checkout(self, pedido, *, status_code=http_status.HTTP_200_OK):
         pedido.refresh_from_db()
