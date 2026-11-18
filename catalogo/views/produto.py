@@ -1,18 +1,22 @@
 from datetime import date
 
-from django.db.models import Sum
+from django.db.models import BooleanField, Case, Count, DecimalField, Exists, F, OuterRef, Q, Subquery, Sum, Value, When
+from django.db.models.functions import Coalesce
+from django.utils import timezone
 from drf_spectacular.utils import (
     OpenApiParameter,
     extend_schema,
 )
 from rest_framework import status as http_status
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAdminUser
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
-from catalogo.models import Produto
+from catalogo.models import Produto, Promocao
 from catalogo.serializers import (
+    ProdutoAdminCatalogoSerializer,
     ProdutoDetailSerializer,
     ProdutoListSerializer,
     ProdutoWriteSerializer,
@@ -52,6 +56,89 @@ class ProdutoViewSet(ModelViewSet):
             return ProdutoWriteSerializer
 
         return ProdutoDetailSerializer
+
+    def _queryset_admin_catalogo(self):
+        """Consulta por página sem uma requisição adicional por produto."""
+        hoje = timezone.localdate()
+        vigentes = (
+            Promocao.objects
+            .filter(produto_id=OuterRef('pk'), data_inicio__lte=hoje, data_fim__gte=hoje)
+            .order_by('-data_inicio', '-pk')
+        )
+        return (
+            Produto.objects.select_related('categoria')
+            .annotate(
+                tem_promocao=Exists(vigentes),
+                preco_efetivo=Coalesce(
+                    Subquery(vigentes.values('preco_promocional')[:1]),
+                    F('preco'),
+                    output_field=DecimalField(max_digits=7, decimal_places=2),
+                ),
+                estoque_baixo_calculado=Case(
+                    When(estoque__lte=F('estoque_minimo'), then=Value(True)),
+                    default=Value(False),
+                    output_field=BooleanField(),
+                ),
+            )
+        )
+
+    @extend_schema(summary='Listagem administrativa paginada de produtos')
+    @action(detail=False, methods=['get'], permission_classes=[IsAdminUser])
+    def admin_catalogo(self, request):
+        """A listagem pública permanece isolada do estoque e dados internos."""
+        busca = request.query_params.get('busca', '').strip()
+        categoria = request.query_params.get('categoria', '').strip()
+        situacao = request.query_params.get('situacao', '').strip()
+
+        if len(busca) > 100:
+            raise ValidationError({'busca': 'Use até 100 caracteres.'})
+        if categoria and (not categoria.isdecimal() or int(categoria) < 1):
+            raise ValidationError({'categoria': 'Categoria inválida.'})
+        situacoes = {'', 'ativo', 'inativo', 'sem-estoque', 'reposicao'}
+        if situacao not in situacoes:
+            raise ValidationError({'situacao': 'Situação inválida.'})
+
+        produtos = self._queryset_admin_catalogo()
+        if busca:
+            produtos = produtos.filter(Q(nome__icontains=busca) | Q(codigo__icontains=busca))
+        if categoria:
+            produtos = produtos.filter(categoria_id=int(categoria))
+        if situacao == 'ativo':
+            produtos = produtos.filter(ativo=True)
+        elif situacao == 'inativo':
+            produtos = produtos.filter(ativo=False)
+        elif situacao == 'sem-estoque':
+            produtos = produtos.filter(estoque=0)
+        elif situacao == 'reposicao':
+            produtos = produtos.filter(estoque__lte=F('estoque_minimo'))
+
+        produtos = produtos.order_by('nome', 'pk')
+        pagina = self.paginate_queryset(produtos)
+        if pagina is not None:
+            serializer = ProdutoAdminCatalogoSerializer(
+                pagina, many=True, context=self.get_serializer_context(),
+            )
+            return self.get_paginated_response(serializer.data)
+        serializer = ProdutoAdminCatalogoSerializer(
+            produtos, many=True, context=self.get_serializer_context(),
+        )
+        return Response(serializer.data)
+
+    @extend_schema(summary='Indicadores globais do catálogo administrativo')
+    @action(detail=False, methods=['get'], permission_classes=[IsAdminUser])
+    def resumo_admin(self, request):
+        hoje = timezone.localdate()
+        vigentes = Promocao.objects.filter(
+            data_inicio__lte=hoje, data_fim__gte=hoje,
+        ).values('produto_id')
+        contagens = Produto.objects.aggregate(
+            total=Count('pk'),
+            ativos=Count('pk', filter=Q(ativo=True)),
+            sem_estoque=Count('pk', filter=Q(estoque=0)),
+            reposicao=Count('pk', filter=Q(estoque__lte=F('estoque_minimo'))),
+            em_promocao=Count('pk', filter=Q(pk__in=vigentes)),
+        )
+        return Response(contagens)
 
     @extend_schema(
         summary='Produtos mais vendidos',
