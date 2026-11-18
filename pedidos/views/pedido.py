@@ -94,7 +94,7 @@ class PedidoViewSet(
         pedido.refresh_from_db()
         return Response(
             {
-                'pedido': PedidoSerializer(pedido).data,
+                'pedido': PedidoSerializer(pedido, context=self.get_serializer_context()).data,
                 'pagamento': PagamentoPedidoSerializer(pedido).data,
             },
             status=status_code,
@@ -282,7 +282,7 @@ class PedidoViewSet(
 
         return Response(
             {
-                'pedido': PedidoSerializer(pedido).data,
+                'pedido': PedidoSerializer(pedido, context=self.get_serializer_context()).data,
                 'pagamento': PagamentoPedidoSerializer(pedido).data,
                 'sincronizacao': sincronizacao,
             }
