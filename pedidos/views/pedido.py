@@ -4,8 +4,9 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.db import IntegrityError, transaction
-from django.db.models import F, Q, Sum
+from django.db.models import Count, F, Q, Sum
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status as http_status
 from rest_framework.decorators import action
@@ -432,6 +433,36 @@ class PedidoViewSet(
             self.get_serializer(pedido).data,
             status=http_status.HTTP_200_OK,
         )
+
+    @extend_schema(summary='Resumo operacional dos pedidos para administradores')
+    @action(
+        detail=False,
+        methods=['get'],
+        permission_classes=[IsAdminUser],
+    )
+    def resumo_admin(self, request):
+        """Contagens no banco: independem da paginação da lista de pedidos."""
+        hoje = timezone.localdate()
+        contagens = Pedido.objects.aggregate(
+            total=Count('pk'),
+            pedidos_hoje=Count('pk', filter=Q(data__date=hoje)),
+            pendentes=Count('pk', filter=Q(status=Pedido.Status.PENDENTE)),
+            confirmados=Count('pk', filter=Q(status=Pedido.Status.CONFIRMADO)),
+            prontos=Count('pk', filter=Q(status=Pedido.Status.PRONTO)),
+            retirados=Count('pk', filter=Q(status=Pedido.Status.RETIRADO)),
+            cancelados=Count('pk', filter=Q(status=Pedido.Status.CANCELADO)),
+            pagamentos_pendentes=Count(
+                'pk',
+                filter=(
+                    ~Q(status=Pedido.Status.CANCELADO)
+                    & Q(status_pagamento__in=[
+                        Pedido.StatusPagamento.PENDENTE,
+                        Pedido.StatusPagamento.PROCESSANDO,
+                    ])
+                ),
+            ),
+        )
+        return Response({'data_referencia': hoje.isoformat(), **contagens})
 
     @extend_schema(
         summary='Relatório de vendas por período',
