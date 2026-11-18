@@ -9,6 +9,7 @@ from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status as http_status
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
 from rest_framework.mixins import CreateModelMixin, ListModelMixin, RetrieveModelMixin
 from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
@@ -68,10 +69,14 @@ class PedidoViewSet(
             return queryset
 
         pagamento = self.request.query_params.get('pagamento', '').strip()
+        if pagamento and pagamento not in Pedido.StatusPagamento.values:
+            raise ValidationError({'pagamento': 'Status de pagamento inválido.'})
         if pagamento:
             queryset = queryset.filter(status_pagamento=pagamento)
 
         busca = self.request.query_params.get('busca', '').strip()
+        if len(busca) > 100:
+            raise ValidationError({'busca': 'Use no máximo 100 caracteres.'})
         if busca:
             criterio = (
                 Q(usuario__name__icontains=busca)
