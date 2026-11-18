@@ -124,6 +124,14 @@ class ProdutoViewSet(ModelViewSet):
         )
         return Response(serializer.data)
 
+    @extend_schema(summary='Detalhes internos de um produto para edição administrativa')
+    @action(detail=True, methods=['get'], permission_classes=[IsAdminUser])
+    def admin_detalhe(self, request, pk=None):
+        """Inclui custo e estoque mínimo exclusivamente para operadores autorizados."""
+        produto = self.get_object()
+        serializer = ProdutoWriteSerializer(produto, context=self.get_serializer_context())
+        return Response(serializer.data)
+
     @extend_schema(summary='Indicadores globais do catálogo administrativo')
     @action(detail=False, methods=['get'], permission_classes=[IsAdminUser])
     def resumo_admin(self, request):
