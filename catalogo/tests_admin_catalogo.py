@@ -41,6 +41,25 @@ class CatalogoAdministrativoTestCase(APITestCase):
         self.assertNotIn('estoque_minimo', resposta.data['results'][0])
         self.assertNotIn('preco_custo', resposta.data['results'][0])
 
+    def test_detalhe_interno_so_admin_recebe_custo_e_limite_de_estoque(self):
+        item = self.produto('Pão integral', estoque=2, estoque_minimo=8)
+        item.preco_custo = Decimal('5.25')
+        item.save(update_fields=['preco_custo'])
+        caminho = f'/api/produtos/{item.id}/admin_detalhe/'
+
+        self.client.force_authenticate(user=self.aluno)
+        self.assertEqual(self.client.get(caminho).status_code, 403)
+        publico = self.client.get(f'/api/produtos/{item.id}/')
+        self.assertNotIn('preco_custo', publico.data)
+        self.assertNotIn('estoque_minimo', publico.data)
+
+        self.client.force_authenticate(user=self.admin)
+        interno = self.client.get(caminho)
+        self.assertEqual(interno.status_code, 200)
+        self.assertEqual(Decimal(interno.data['preco_custo']), Decimal('5.25'))
+        self.assertEqual(interno.data['estoque_minimo'], 8)
+        self.assertEqual(interno.data['estoque'], 2)
+
     def test_pagina_traz_dados_completos_e_promocao_vigente(self):
         item = self.produto('Coxinha especial', estoque=1, estoque_minimo=3)
         Promocao.objects.create(
