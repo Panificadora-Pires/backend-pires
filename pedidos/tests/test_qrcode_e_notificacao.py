@@ -42,6 +42,17 @@ class QRCodeRetiradaTestCase(CriaUsuariosEProdutosMixin, APITestCase):
         resposta = self.client.get(f'/api/pedidos/{self.pedido.id}/qrcode/')
         self.assertEqual(resposta.status_code, status.HTTP_404_NOT_FOUND)
 
+    def test_cliente_recebe_codigo_no_checkout_tradicional(self):
+        self.client.force_authenticate(user=self.aluno)
+        resposta = self.client.post(
+            '/api/pedidos/',
+            {'itens_criacao': [{'produto': self.coxinha.id, 'quantidade': 1}]},
+            format='json',
+        )
+        self.assertEqual(resposta.status_code, status.HTTP_201_CREATED)
+        self.assertIn('codigo_retirada', resposta.data)
+        self.assertTrue(resposta.data['codigo_retirada'])
+
     def test_aluno_consegue_obter_codigo_no_detalhe(self):
         self.client.force_authenticate(user=self.aluno)
         resposta = self.client.get(f'/api/pedidos/{self.pedido.id}/')
