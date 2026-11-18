@@ -98,3 +98,13 @@ class ListagemPedidosAdministrativosTestCase(CriaUsuariosEProdutosMixin, APITest
         )
         self.assertEqual(resposta.status_code, status.HTTP_200_OK)
         self.assertEqual(resposta.data['id'], pedido.id)
+
+    def test_busca_excessiva_e_pagamento_invalido_sao_rejeitados(self):
+        self.client.force_authenticate(user=self.admin)
+        resposta = self.client.get(self.url, {'busca': '9' * 120})
+        self.assertEqual(resposta.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('busca', resposta.data)
+
+        resposta = self.client.get(self.url, {'pagamento': 'desconhecido'})
+        self.assertEqual(resposta.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('pagamento', resposta.data)
