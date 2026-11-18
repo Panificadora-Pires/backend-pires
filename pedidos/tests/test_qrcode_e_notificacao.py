@@ -59,6 +59,12 @@ class QRCodeRetiradaTestCase(CriaUsuariosEProdutosMixin, APITestCase):
         self.assertEqual(resposta.status_code, status.HTTP_200_OK)
         self.assertEqual(resposta.data['codigo_retirada'], str(self.pedido.codigo_retirada))
 
+    def test_django_admin_nao_exibe_codigo_em_formulario_ou_busca(self):
+        from pedidos.admin import PedidoAdmin
+        self.assertIn('codigo_retirada', PedidoAdmin.exclude)
+        self.assertNotIn('codigo_retirada', PedidoAdmin.search_fields)
+        self.assertNotIn('codigo_retirada', PedidoAdmin.readonly_fields)
+
     def test_retirada_admin_nao_devolve_codigo_de_cliente(self):
         self.client.force_authenticate(user=self.admin)
         resposta = self.client.post(
