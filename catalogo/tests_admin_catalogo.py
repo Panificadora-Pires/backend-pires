@@ -3,6 +3,8 @@ from datetime import timedelta
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -138,7 +140,7 @@ class CatalogoAdministrativoTestCase(APITestCase):
         self.client.force_authenticate(user=self.admin)
         resposta = self.client.get(rota)
         self.assertEqual(resposta.status_code, 200)
-        self.assertEqual(resposta.data, {'total': 0, 'ativas': 0})
+        self.assertEqual(resposta.data, {'total': 0, 'ativas': 0, 'agendadas': 0, 'encerradas': 0})
 
     def test_resumo_promocoes_considera_datas_e_nao_depende_de_paginacao(self):
         hoje = timezone.localdate()
@@ -157,7 +159,7 @@ class CatalogoAdministrativoTestCase(APITestCase):
         self.client.force_authenticate(user=self.admin)
         resposta = self.client.get('/api/promocoes/resumo_admin/')
         self.assertEqual(resposta.status_code, 200)
-        self.assertEqual(resposta.data, {'total': 3, 'ativas': 1})
+        self.assertEqual(resposta.data, {'total': 3, 'ativas': 1, 'agendadas': 1, 'encerradas': 1})
 
     def test_ranking_devolve_imagem_sem_precisar_do_catalogo_completo(self):
         produto = self.produto('Brioche de chocolate')
@@ -182,3 +184,97 @@ class CatalogoAdministrativoTestCase(APITestCase):
         self.assertTrue(ranking[0]['produto_imagem'])
         self.assertIn('ranking.png', ranking[0]['produto_imagem'])
         self.assertIsNone(ranking[1]['produto_imagem'])
+
+    def test_admin_listagem_promocoes_exige_admin_e_nao_permitem_escrita(self):
+        url = '/api/promocoes/admin_listagem/'
+        self.assertIn(self.client.get(url).status_code, (401, 403))
+        self.client.force_authenticate(user=self.aluno)
+        self.assertEqual(self.client.get(url).status_code, 403)
+        self.client.force_authenticate(user=self.admin)
+        self.assertEqual(self.client.get(url).status_code, 200)
+        self.assertEqual(self.client.post(url, {}).status_code, 405)
+
+    def test_listagem_promocoes_filtra_no_banco_e_preserva_ordem_editorial(self):
+        hoje = timezone.localdate()
+        coxinha = self.produto('Coxinha especial')
+        bolo = self.produto('Bolo de milho')
+        pao = self.produto('Pão de queijo')
+        registrados = [
+            Promocao.objects.create(
+                produto=coxinha, preco_promocional=Decimal('9.00'),
+                data_inicio=hoje - timedelta(days=1), data_fim=hoje + timedelta(days=3)),
+            Promocao.objects.create(
+                produto=bolo, preco_promocional=Decimal('9.00'),
+                data_inicio=hoje + timedelta(days=1), data_fim=hoje + timedelta(days=5)),
+            Promocao.objects.create(
+                produto=pao, preco_promocional=Decimal('9.00'),
+                data_inicio=hoje - timedelta(days=7), data_fim=hoje - timedelta(days=1)),
+        ]
+        self.client.force_authenticate(user=self.admin)
+        url = '/api/promocoes/admin_listagem/'
+        total = self.client.get(url, {'page_size': 2})
+        segunda = self.client.get(url, {'page_size': 2, 'page': 2})
+        self.assertEqual(total.status_code, 200)
+        self.assertEqual(total.data['count'], 3)
+        self.assertEqual(total.data['total_pages'], 2)
+        self.assertEqual([r['id'] for r in total.data['results']], [r.id for r in registrados[:2]])
+        self.assertEqual([r['id'] for r in segunda.data['results']], [registrados[2].id])
+        self.assertEqual(
+            self.client.get(url, {'situacao': 'ativa'}).data['count'], 1)
+        self.assertEqual(
+            self.client.get(url, {'situacao': 'agendada'}).data['count'], 1)
+        self.assertEqual(
+            self.client.get(url, {'situacao': 'encerrada'}).data['count'], 1)
+        self.assertEqual(
+            self.client.get(url, {'busca': 'MILHO'}).data['results'][0]['id'],
+            registrados[1].id)
+        self.assertEqual(
+            self.client.get(url, {'busca': 'PAO'}).data['results'][0]['id'],
+            registrados[2].id)
+        self.assertEqual(
+            self.client.get(url, {'busca': 'Bolo', 'situacao': 'ativa'}).data['count'],
+            0)
+        self.assertEqual(
+            self.client.get('/api/promocoes/resumo_admin/').data,
+            {'total': 3, 'ativas': 1, 'agendadas': 1, 'encerradas': 1},
+        )
+
+    def test_listagem_promocoes_rejeita_filtros_invalidos(self):
+        self.client.force_authenticate(user=self.admin)
+        url = '/api/promocoes/admin_listagem/'
+        for dados in (
+            {'situacao': 'outra'}, {'busca': 'x' * 101},
+        ):
+            with self.subTest(dados=dados):
+                self.assertEqual(self.client.get(url, dados).status_code, 400)
+
+    def test_mais_de_3000_promocoes_sem_n_mais_um_e_sem_totais_parciais(self):
+        from datetime import timedelta
+        produto = self.produto('Produto de teste em escala')
+        hoje = timezone.localdate()
+        inicio = hoje - timedelta(days=1500)
+        Promocao.objects.bulk_create(
+            [
+                Promocao(
+                    produto=produto, preco_promocional=Decimal('8.00'),
+                    data_inicio=inicio + timedelta(days=i),
+                    data_fim=inicio + timedelta(days=i),
+                )
+                for i in range(3001)
+            ],
+            batch_size=250,
+        )
+        self.client.force_authenticate(user=self.admin)
+        with CaptureQueriesContext(connection) as consultas:
+            pagina = self.client.get(
+                '/api/promocoes/admin_listagem/',
+                {'page': 2, 'page_size': 18},
+            )
+        self.assertEqual(pagina.status_code, 200)
+        self.assertEqual(pagina.data['count'], 3001)
+        self.assertEqual(pagina.data['page_size'], 18)
+        self.assertEqual(len(pagina.data['results']), 18)
+        self.assertLessEqual(len(consultas), 8, 'A listagem não deve consultar cada produto')
+        resumo = self.client.get('/api/promocoes/resumo_admin/').data
+        self.assertEqual(resumo['total'], 3001)
+        self.assertEqual(sum(resumo[k] for k in ('ativas', 'agendadas', 'encerradas')), 3001)
