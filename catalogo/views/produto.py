@@ -296,9 +296,20 @@ class ProdutoViewSet(ModelViewSet):
             )[:limite]
         )
 
+        # Imagens de apenas alguns itens do ranking, sem consultar o catálogo inteiro.
+        ranking = list(ranking)
+        imagens = {
+            produto.pk: request.build_absolute_uri(produto.imagem.url)
+            for produto in Produto.objects.filter(
+                pk__in=[item['produto_id'] for item in ranking if item['produto_id'] is not None]
+            ).only('id', 'imagem')
+            if produto.imagem
+        }
+
         resultado = [
             {
                 'produto_id': item['produto_id'],
+                'produto_imagem': imagens.get(item['produto_id']),
                 'produto_nome': item['produto__nome'],
                 'produto_codigo': item[
                     'produto__codigo'
