@@ -4,6 +4,7 @@
 não envia sinais, portanto a leitura de chat/notificações é instrumentada
 explicitamente onde usa update().
 """
+from django.conf import settings
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
@@ -41,9 +42,9 @@ def pedido_salvo(sender, instance, created, raw, using, update_fields, **kwargs)
 
 @receiver(post_save, sender=Mensagem, dispatch_uid='pires.realtime.chat.enviado')
 def mensagem_salva(sender, instance, created, raw, using, **kwargs):
-    if raw or not created:
+    if raw or not created or not settings.REALTIME_ENABLED:
         return
-    # A consulta é limitada ao ID da conversa; não envia texto do chat.
+    # Sem uma consulta extra quando o realtime está desativado.
     from chat.models import Conversa
 
     pedido = Conversa.objects.using(using).filter(pk=instance.conversa_id).values(
