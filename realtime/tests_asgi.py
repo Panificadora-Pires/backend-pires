@@ -106,18 +106,29 @@ class HandshakeTestCase(TestCase):
         async def send(message):
             saidas.append(message)
 
-        async def receive():
-            return {'type': 'websocket.connect'}
-
-        asyncio.run(middleware(
-            {
-                'type': 'websocket',
-                'headers': [(b'origin', b'https://site-malicioso.example')],
-                'subprotocols': [],
-            },
-            receive,
-            send,
+        mensagens = iter((
+            {'type': 'websocket.connect'},
+            {'type': 'websocket.disconnect', 'code': 1000},
         ))
+
+        async def receive():
+            return next(mensagens)
+
+        async def verificar():
+            await asyncio.wait_for(
+                middleware(
+                    {
+                        'type': 'websocket',
+                        'headers': [(b'origin', b'https://site-malicioso.example')],
+                        'subprotocols': [],
+                    },
+                    receive,
+                    send,
+                ),
+                timeout=2,
+            )
+
+        asyncio.run(verificar())
         app.assert_not_awaited()
         self.assertTrue(any(item.get('type') == 'websocket.close' for item in saidas))
 
