@@ -1,3 +1,6 @@
+import re
+import unicodedata
+
 from django.db.models import Case, Count, DateField, F, IntegerField, Q, Value, When
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema
@@ -10,6 +13,26 @@ from rest_framework.viewsets import ModelViewSet
 from catalogo.models import Promocao
 from catalogo.serializers import PromocaoSerializer
 from core.permissions import IsAdminOrReadOnly
+
+
+_ACENTOS = {
+    'a': 'aáàâãä', 'e': 'eéèêë', 'i': 'iíìîï',
+    'o': 'oóòôõö', 'u': 'uúùûü', 'c': 'cç',
+    'n': 'nñ',
+}
+
+
+def _busca_nome_sem_acentos(texto):
+    """Regex literal, portátil entre PostgreSQL e SQLite (sem extensão unaccent)."""
+    sem_acentos = ''.join(
+        letra for letra in unicodedata.normalize('NFD', texto)
+        if not unicodedata.combining(letra)
+    )
+    return ''.join(
+        f"[{_ACENTOS[letra.lower()]}]" if letra.lower() in _ACENTOS
+        else re.escape(letra)
+        for letra in sem_acentos
+    )
 
 
 class PromocaoViewSet(ModelViewSet):
@@ -34,7 +57,7 @@ class PromocaoViewSet(ModelViewSet):
         hoje = timezone.localdate()
         promocoes = Promocao.objects.select_related('produto')
         if busca:
-            promocoes = promocoes.filter(produto__nome__icontains=busca)
+            promocoes = promocoes.filter(produto__nome__iregex=_busca_nome_sem_acentos(busca))
         if situacao == 'ativa':
             promocoes = promocoes.filter(data_inicio__lte=hoje, data_fim__gte=hoje)
         elif situacao == 'agendada':
