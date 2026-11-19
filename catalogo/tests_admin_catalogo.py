@@ -140,7 +140,7 @@ class CatalogoAdministrativoTestCase(APITestCase):
         self.client.force_authenticate(user=self.admin)
         resposta = self.client.get(rota)
         self.assertEqual(resposta.status_code, 200)
-        self.assertEqual(resposta.data, {'total': 0, 'ativas': 0})
+        self.assertEqual(resposta.data, {'total': 0, 'ativas': 0, 'agendadas': 0, 'encerradas': 0})
 
     def test_resumo_promocoes_considera_datas_e_nao_depende_de_paginacao(self):
         hoje = timezone.localdate()
