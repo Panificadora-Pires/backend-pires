@@ -29,6 +29,7 @@ dependencies = [
   "qrcode>=7.4.2",
   "setuptools>=68.2.2",
   "uvicorn>=0.29.0",
+  "wsproto>=1.2,<2",
   "whitenoise[brotli]>=6.6.0",
   "google-auth>=2.56.2",
   "requests>=2.32.0",
