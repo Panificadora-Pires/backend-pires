@@ -290,7 +290,7 @@ INSTALLED_APPS = [
     'favoritos',
     'chat',
     'chatbot',
-    'realtime',
+    'realtime.apps.RealtimeConfig',
 ]
 
 if CLOUDINARY_URL:
