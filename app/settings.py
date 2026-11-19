@@ -77,6 +77,28 @@ CSRF_TRUSTED_ORIGINS = FRONTEND_URLS
 # A API usa JWT em header Authorization; não depende de cookies entre origens.
 CORS_ALLOW_CREDENTIALS = False
 
+# PR6A.1: transporte opt-in. O Procfile WSGI e o polling seguem inalterados.
+# Redis privado e proxy WSS devem ser validados no Fabroku antes da ativação.
+REALTIME_ENABLED = env_bool('REALTIME_ENABLED', False)
+REALTIME_REDIS_URL = os.getenv('REALTIME_REDIS_URL', '').strip()
+REALTIME_ALLOWED_ORIGINS = env_list('REALTIME_ALLOWED_ORIGINS', ','.join(FRONTEND_URLS))
+REALTIME_TICKET_TTL_SECONDS = int(os.getenv('REALTIME_TICKET_TTL_SECONDS', '45'))
+
+if not 15 <= REALTIME_TICKET_TTL_SECONDS <= 120:
+    raise RuntimeError('REALTIME_TICKET_TTL_SECONDS deve estar entre 15 e 120.')
+if REALTIME_ENABLED:
+    if not REALTIME_REDIS_URL.startswith(('redis://', 'rediss://', 'unix://')):
+        raise RuntimeError('REALTIME_REDIS_URL deve apontar para um Redis privado válido.')
+    if not REALTIME_ALLOWED_ORIGINS:
+        raise RuntimeError('REALTIME_ALLOWED_ORIGINS precisa de origens explícitas.')
+    # Sem InMemoryChannelLayer em produção: grupos entre workers exigem Redis.
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels_redis.core.RedisChannelLayer',
+            'CONFIG': {'hosts': [REALTIME_REDIS_URL]},
+        },
+    }
+
 
 SECURE_PROXY_SSL_HEADER = (
     'HTTP_X_FORWARDED_PROTO',
