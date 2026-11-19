@@ -1,5 +1,5 @@
 import logging
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 from django.conf import settings
@@ -37,6 +37,7 @@ from pedidos.services.pagamentos import (
     validar_assinatura_webhook,
 )
 from pedidos.services.pedido import criar_pedido_reservando_estoque
+from pedidos.services.relatorio_analitico import gerar_relatorio_analitico
 from pedidos.utils import gerar_qrcode_base64
 
 
@@ -467,6 +468,70 @@ class PedidoViewSet(
             ),
         )
         return Response({'data_referencia': hoje.isoformat(), **contagens})
+
+    @extend_schema(
+        summary='Relatório analítico administrativo com série diária e comparação',
+        parameters=[
+            OpenApiParameter(
+                'data_inicio', str, required=True,
+                description='Data inicial inclusiva no formato YYYY-MM-DD',
+            ),
+            OpenApiParameter(
+                'data_fim', str, required=True,
+                description='Data final inclusiva no formato YYYY-MM-DD (até 366 dias)',
+            ),
+        ],
+    )
+    @action(detail=False, methods=['get'], permission_classes=[IsAdminUser])
+    def relatorio_analitico_admin(self, request):
+        """Relatório agregado no banco, sem listar pedidos ou dados pessoais."""
+        inicio_texto = request.query_params.get('data_inicio')
+        fim_texto = request.query_params.get('data_fim')
+
+        if not inicio_texto or not fim_texto:
+            return Response(
+                {'detail': 'Informe data_inicio e data_fim no formato YYYY-MM-DD.'},
+                status=http_status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            if (
+                len(inicio_texto) != 10 or len(fim_texto) != 10
+                or inicio_texto[4] != '-' or inicio_texto[7] != '-'
+                or fim_texto[4] != '-' or fim_texto[7] != '-'
+            ):
+                raise ValueError('Formato de data inválido')
+            data_inicio = date.fromisoformat(inicio_texto)
+            data_fim = date.fromisoformat(fim_texto)
+        except (TypeError, ValueError):
+            return Response(
+                {'detail': 'Datas inválidas. Use o formato YYYY-MM-DD.'},
+                status=http_status.HTTP_400_BAD_REQUEST,
+            )
+
+        if data_inicio > data_fim:
+            return Response(
+                {'detail': 'data_inicio não pode ser posterior a data_fim.'},
+                status=http_status.HTTP_400_BAD_REQUEST,
+            )
+
+        duracao = (data_fim - data_inicio).days + 1
+        if duracao > 366:
+            return Response(
+                {'detail': 'O período deve ter no máximo 366 dias.'},
+                status=http_status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            # A comparação exige um período anterior de mesma duração.
+            data_inicio - timedelta(days=duracao)
+            data_fim + timedelta(days=1)
+        except OverflowError:
+            return Response(
+                {'detail': 'Escolha um período que permita comparação com datas anteriores.'},
+                status=http_status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response(gerar_relatorio_analitico(data_inicio, data_fim))
 
     @extend_schema(
         summary='Relatório de vendas por período',
