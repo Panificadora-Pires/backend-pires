@@ -3,6 +3,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import ReadOnlyModelViewSet
 
+from realtime.events import publicar_evento
+
 from .models import Notificacao
 from .serializers import NotificacaoSerializer
 
@@ -31,5 +33,7 @@ class NotificacaoViewSet(ReadOnlyModelViewSet):
 
     @action(detail=False, methods=['post'])
     def marcar_todas_lidas(self, request):
-        self.get_queryset().filter(lida=False).update(lida=True)
+        alteradas = self.get_queryset().filter(lida=False).update(lida=True)
+        if alteradas:
+            publicar_evento('notificacao.alterada', usuario_id=request.user.pk)
         return Response({'detail': 'Todas as notificações foram marcadas como lidas.'})
