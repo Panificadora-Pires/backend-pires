@@ -83,9 +83,12 @@ REALTIME_ENABLED = env_bool('REALTIME_ENABLED', False)
 REALTIME_REDIS_URL = os.getenv('REALTIME_REDIS_URL', '').strip()
 REALTIME_ALLOWED_ORIGINS = env_list('REALTIME_ALLOWED_ORIGINS', ','.join(FRONTEND_URLS))
 REALTIME_TICKET_TTL_SECONDS = int(os.getenv('REALTIME_TICKET_TTL_SECONDS', '45'))
+REALTIME_MAX_CONNECTION_SECONDS = int(os.getenv('REALTIME_MAX_CONNECTION_SECONDS', '300'))
 
 if not 15 <= REALTIME_TICKET_TTL_SECONDS <= 120:
     raise RuntimeError('REALTIME_TICKET_TTL_SECONDS deve estar entre 15 e 120.')
+if not 60 <= REALTIME_MAX_CONNECTION_SECONDS <= 900:
+    raise RuntimeError('REALTIME_MAX_CONNECTION_SECONDS deve estar entre 60 e 900.')
 if REALTIME_ENABLED:
     if not REALTIME_REDIS_URL.startswith(('redis://', 'rediss://', 'unix://')):
         raise RuntimeError('REALTIME_REDIS_URL deve apontar para um Redis privado válido.')
