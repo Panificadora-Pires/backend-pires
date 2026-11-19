@@ -38,3 +38,7 @@ pdm run python manage.py test --noinput --verbosity 1
 ```
 
 **Gates antes de disponibilizar ao frontend:** Redis real com dois processos, WSS Fabroku, retry/reconexão, revogação/logout, isolamento entre duas contas, queda do Redis, monitoramento de tempo de entrega, regressão de pagamentos e QR. A implementação continua **fora de `dev` e `main`** até esses critérios.
+
+## Driver WebSocket e homologação
+
+O PR6A.1 agora inclui `wsproto` no lock PDM e pode aceitar `REDIS_URL` privado fornecido pelo Fabroku. Essas correções foram incorporadas à branch PR6A.2 por merge de feature (PR #60). Para validar o transporte real, usar o [runbook HML](https://github.com/Panificadora-Pires/backend-pires/blob/deploy/pr6-hml-asgi/docs/operations/FABROKU-PR6-HOMOLOGACAO.md) e a branch `deploy/pr6-hml-asgi`, **sem alterar o app de produção**. O CI unitário não substitui o handshake WSS/Redis de homologação.
