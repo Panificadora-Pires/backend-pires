@@ -287,6 +287,7 @@ INSTALLED_APPS = [
     'favoritos',
     'chat',
     'chatbot',
+    'realtime',
 ]
 
 if CLOUDINARY_URL:
@@ -489,6 +490,7 @@ REST_FRAMEWORK = {
         'password_reset': '20/hour',
         'chat_mensagem': os.getenv('THROTTLE_CHAT_MENSAGEM', '20/min'),
         'chatbot': os.getenv('THROTTLE_CHATBOT', '30/min'),
+        'realtime_ticket': os.getenv('THROTTLE_REALTIME_TICKET', '15/min'),
     },
 }
 
