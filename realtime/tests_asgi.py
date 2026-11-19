@@ -106,13 +106,16 @@ class HandshakeTestCase(TestCase):
         async def send(message):
             saidas.append(message)
 
+        async def receive():
+            return {'type': 'websocket.connect'}
+
         asyncio.run(middleware(
             {
                 'type': 'websocket',
                 'headers': [(b'origin', b'https://site-malicioso.example')],
                 'subprotocols': [],
             },
-            AsyncMock(),
+            receive,
             send,
         ))
         app.assert_not_awaited()
