@@ -83,6 +83,27 @@ class UserSerializer(serializers.ModelSerializer):
         return obj.has_usable_password()
 
 
+class UserAdminListSerializer(serializers.ModelSerializer):
+    """Campos mínimos para a listagem administrativa de contas.
+
+    Não inclui telefone, foto, grupos, IDs de login social ou atributos
+    internos de autenticação. Nenhuma operação de escrita é exposta.
+    """
+
+    class Meta:
+        model = User
+        fields = [
+            'id',
+            'name',
+            'email',
+            'is_staff',
+            'is_active',
+            'email_verified',
+            'last_login',
+        ]
+        read_only_fields = fields
+
+
 class UserProfileUpdateSerializer(serializers.ModelSerializer):
     """Edição segura dos dados pessoais do próprio usuário."""
 

@@ -2,6 +2,7 @@ import logging
 import smtplib
 
 from django.conf import settings
+from django.db.models import Count, Q
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.decorators import action
@@ -21,7 +22,7 @@ from core.serializers import (
     UserRegistrationSerializer,
     UserSerializer,
 )
-from core.serializers.user import UserProfileUpdateSerializer
+from core.serializers.user import UserAdminListSerializer, UserProfileUpdateSerializer
 from core.services import (
     issue_challenge,
     invalidate_challenge,
@@ -52,6 +53,85 @@ class UserViewSet(ReadOnlyModelViewSet):
             permission()
             for permission in permission_classes
         ]
+
+    @extend_schema(
+        summary='Listar contas para administração com filtros e paginação',
+        description=(
+            'Somente administradores. Busca em nome e e-mail, filtros por '
+            'perfil, situação e confirmação de e-mail. '
+            'Retorna apenas campos necessários à tela de usuários.'
+        ),
+        responses={200: UserAdminListSerializer(many=True)},
+    )
+    @action(detail=False, methods=['get'], permission_classes=[IsAdminUser])
+    def admin_listagem(self, request):
+        busca = (request.query_params.get('busca') or '').strip()
+        perfil = request.query_params.get('perfil') or ''
+        situacao = request.query_params.get('situacao') or ''
+        verificacao = request.query_params.get('verificacao') or ''
+
+        if len(busca) > 100:
+            return Response(
+                {'detail': 'A busca deve ter até 100 caracteres.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if perfil not in ('', 'admin', 'cliente'):
+            return Response(
+                {'detail': 'Perfil inválido.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if situacao not in ('', 'ativa', 'inativa'):
+            return Response(
+                {'detail': 'Situação inválida.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if verificacao not in ('', 'verificado', 'pendente'):
+            return Response(
+                {'detail': 'Verificação inválida.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        usuarios = User.objects.only(
+            'id', 'name', 'email', 'is_staff', 'is_active',
+            'email_verified', 'last_login',
+        ).order_by('-id')
+
+        if busca:
+            usuarios = usuarios.filter(
+                Q(name__icontains=busca) | Q(email__icontains=busca)
+            )
+        if perfil:
+            usuarios = usuarios.filter(is_staff=(perfil == 'admin'))
+        if situacao:
+            usuarios = usuarios.filter(is_active=(situacao == 'ativa'))
+        if verificacao:
+            usuarios = usuarios.filter(
+                email_verified=(verificacao == 'verificado')
+            )
+
+        pagina = self.paginate_queryset(usuarios)
+        if pagina is not None:
+            dados = UserAdminListSerializer(pagina, many=True).data
+            return self.get_paginated_response(dados)
+        dados = UserAdminListSerializer(usuarios, many=True).data
+        return Response(dados)
+
+    @extend_schema(
+        summary='Contadores globais de contas para administração',
+        description='Resumo SQL sem dados pessoais. Somente administradores.',
+    )
+    @action(detail=False, methods=['get'], permission_classes=[IsAdminUser])
+    def resumo_admin(self, request):
+        contagens = User.objects.aggregate(
+            total=Count('pk'),
+            administradores=Count('pk', filter=Q(is_staff=True)),
+            clientes=Count('pk', filter=Q(is_staff=False)),
+            ativas=Count('pk', filter=Q(is_active=True)),
+            emails_verificados=Count(
+                'pk', filter=Q(email_verified=True),
+            ),
+        )
+        return Response(contagens)
 
     @extend_schema(
         summary='Consultar ou atualizar o próprio perfil',
