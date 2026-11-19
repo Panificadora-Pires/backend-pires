@@ -80,7 +80,8 @@ CORS_ALLOW_CREDENTIALS = False
 # PR6A.1: transporte opt-in. O Procfile WSGI e o polling seguem inalterados.
 # Redis privado e proxy WSS devem ser validados no Fabroku antes da ativação.
 REALTIME_ENABLED = env_bool('REALTIME_ENABLED', False)
-REALTIME_REDIS_URL = os.getenv('REALTIME_REDIS_URL', '').strip()
+# Fabroku/Dokku vincula Redis como REDIS_URL; override exclusivo via REALTIME_REDIS_URL.
+REALTIME_REDIS_URL = (os.getenv('REALTIME_REDIS_URL') or os.getenv('REDIS_URL') or '').strip()
 REALTIME_ALLOWED_ORIGINS = env_list('REALTIME_ALLOWED_ORIGINS', ','.join(FRONTEND_URLS))
 REALTIME_TICKET_TTL_SECONDS = int(os.getenv('REALTIME_TICKET_TTL_SECONDS', '45'))
 REALTIME_MAX_CONNECTION_SECONDS = int(os.getenv('REALTIME_MAX_CONNECTION_SECONDS', '300'))
