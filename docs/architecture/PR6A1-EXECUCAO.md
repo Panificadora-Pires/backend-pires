@@ -29,7 +29,7 @@ REALTIME_MAX_CONNECTION_SECONDS=300
 Nunca publique Redis local na internet nem inclua credenciais no repositório. Se Redis não estiver disponível, mantenha o flag desligado. Para subir o **ASGI** explicitamente em ambiente local:
 
 ```powershell
-pdm run uvicorn app.asgi:application --host 127.0.0.1 --port 8000
+pdm run uvicorn app.asgi:application --host 127.0.0.1 --port 8000 --ws wsproto
 ```
 
 **Atenção:** `pdm run python manage.py runserver` não comprova WebSockets, pois a escolha de servidor deve ser ASGI. O `Procfile` de produção permanece `gunicorn app.wsgi:application` nesta etapa.
@@ -55,3 +55,6 @@ Não colocar JWT persistente ou refresh token na URL, nos subprotocolos ou em lo
 - Validar com admin e cliente distintos, duas sessões, WSS real, ausência de fuga de dados, revogação, impacto no checkout/QR, reinício do Redis e rollback para WSGI antes de publicar.
 
 Links: [Issue backend #56](https://github.com/Panificadora-Pires/backend-pires/issues/56), [PR de arquitetura #57](https://github.com/Panificadora-Pires/backend-pires/pull/57), [Issue frontend #73](https://github.com/Panificadora-Pires/frontend-pires/issues/73).
+
+
+O driver WebSocket `wsproto` é uma dependência de runtime explícita para Uvicorn; o pacote base `uvicorn` sozinho não garante suporte WS. Em staging Fabroku, ao vincular Redis pelo serviço da plataforma, a URL normalmente é exposta como `REDIS_URL`. `REALTIME_REDIS_URL` opcional tem prioridade se houver Redis dedicado; nunca copie segredos para o Git.
