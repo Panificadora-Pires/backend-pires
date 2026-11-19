@@ -89,7 +89,7 @@ def gerar_relatorio_analitico(data_inicio, data_fim):
         .values('dia_local', 'forma_pagamento')
         .annotate(
             pedidos=Count('pk', distinct=True),
-            itens=Coalesce(Sum('itens__quantidade'), Value(0), output_field=IntegerField()),
+            quantidade_itens=Coalesce(Sum('itens__quantidade'), Value(0), output_field=IntegerField()),
             receita=Coalesce(
                 Sum(preco_historico, output_field=CAMPO_VALOR),
                 Value(Decimal('0.00'), output_field=CAMPO_VALOR),
@@ -107,7 +107,7 @@ def gerar_relatorio_analitico(data_inicio, data_fim):
     for linha in linhas:
         dia = linha['dia_local']
         quantidade = linha['pedidos']
-        itens = linha['itens']
+        itens = linha['quantidade_itens']
         receita = linha['receita']
         if dia < data_inicio:
             _somar(anterior, pedidos=quantidade, itens=itens, receita=receita)
