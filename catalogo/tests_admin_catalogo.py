@@ -198,7 +198,7 @@ class CatalogoAdministrativoTestCase(APITestCase):
         hoje = timezone.localdate()
         coxinha = self.produto('Coxinha especial')
         bolo = self.produto('Bolo de milho')
-        pao = self.produto('Pao de queijo')
+        pao = self.produto('Pão de queijo')
         registrados = [
             Promocao.objects.create(
                 produto=coxinha, preco_promocional=Decimal('9.00'),
@@ -228,6 +228,9 @@ class CatalogoAdministrativoTestCase(APITestCase):
         self.assertEqual(
             self.client.get(url, {'busca': 'MILHO'}).data['results'][0]['id'],
             registrados[1].id)
+        self.assertEqual(
+            self.client.get(url, {'busca': 'PAO'}).data['results'][0]['id'],
+            registrados[2].id)
         self.assertEqual(
             self.client.get(url, {'busca': 'Bolo', 'situacao': 'ativa'}).data['count'],
             0)
