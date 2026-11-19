@@ -1,5 +1,8 @@
 """Consumer somente-leitura: cliente nunca altera pedidos por WebSocket."""
+import asyncio
 import json
+
+from django.conf import settings
 
 from channels.generic.websocket import AsyncWebsocketConsumer
 
@@ -29,8 +32,19 @@ class EventsConsumer(AsyncWebsocketConsumer):
             await self.close(code=1013)
             return
         await self.accept(subprotocol='pires.v1')
+        # A sessão WS não dura indefinidamente depois de revogação da conta.
+        self._expiracao_tarefa = asyncio.create_task(self._expirar_conexao())
+
+    async def _expirar_conexao(self):
+        try:
+            await asyncio.sleep(settings.REALTIME_MAX_CONNECTION_SECONDS)
+        except asyncio.CancelledError:
+            return
+        await self.close(code=4401)
 
     async def disconnect(self, close_code):
+        if hasattr(self, '_expiracao_tarefa'):
+            self._expiracao_tarefa.cancel()
         if hasattr(self, 'grupo'):
             try:
                 await self.channel_layer.group_discard(self.grupo, self.channel_name)
