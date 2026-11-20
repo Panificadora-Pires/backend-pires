@@ -78,6 +78,31 @@ Ao criar/deployar o app HML:
 
 Se migrações ou acesso HTTP falharem, **parar** antes de ativar WS. Não tentar corrigir apontando `DATABASE_URL` para produção. O banco Neon pode suspender o compute ocioso e ter atraso na primeira conexão.
 
+## Gate intermediário — diagnosticar Redis no Fabroku
+
+**Situação atual:** o app HML está Running com `GET /api/health/` retornando `{"status":"ok"}`. O serviço Redis HML foi recriado depois de exposição acidental de credencial e vinculado novamente; `REDIS_URL` deve permanecer gerenciada exclusivamente pelo Fabroku.
+
+Antes de ativar WebSockets, mantenha `REALTIME_ENABLED=False`. Na aplicação **backend-pires-hml**, execute um **Redeploy manual somente da branch HML** após este commit, porque o webhook automático GitHub não estava disponível na primeira implantação. Após retornar a Running, use o campo de comando situado abaixo dos logs para executar exatamente:
+
+```text
+python manage.py diagnosticar_redis_hml
+```
+
+Esse comando Django existe **somente na branch `deploy/pr6-hml-asgi`**, porque o console Fabroku bloqueia corretamente `manage.py shell -c` e interpretadores arbitrários.
+
+Resultado esperado:
+
+```text
+Redis PING: OK
+Versão Redis: 7.x.x
+GETDEL atômico: OK
+Redis HML: PRONTO para o próximo gate
+```
+
+A versão numérica acima é **exemplo, não descoberta**. Redis precisa oferecer GETDEL (Redis >= 6.2); o teste executa SET NX com TTL de 30 segundos e GETDEL duas vezes numa chave aleatória exclusiva, sem alterar tickets nem dados do app. Se INFO estiver bloqueado, a linha de versão será `não disponível (INFO restrito)`, mas o teste GETDEL ainda comprova o requisito. O diagnóstico não imprime URL, host, senha nem conteúdo de dados reais.
+
+Se falhar, não ative `REALTIME_ENABLED`. Verifique o vínculo REDIS_URL e a conectividade interna da HML, sem alterar o banco Neon ou o PostgreSQL da produção. Se passar, siga para o próximo gate com Origin explícito, e depois handshake WSS/ticket HTTP autenticado.
+
 ## 4. Habilitar realtime na HML
 
 Depois que HTTP e Redis privado estiverem validados, mudar somente na aplicação HML:
