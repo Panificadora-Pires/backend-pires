@@ -6,6 +6,9 @@ on:
     paths:
       - realtime/management/commands/preparar_contas_hml.py
       - realtime/test_contas_hml.py
+      - realtime/test_diagnostico_ticket_hml.py
+      - realtime/management/commands/diagnosticar_ticket_hml.py
+      - realtime/views.py
       - .github/workflows/hml-contas-check.yml
   workflow_dispatch:
 permissions:
@@ -35,4 +38,4 @@ jobs:
       - name: Django checks
         run: pdm run python manage.py check
       - name: Testar isolamento e senhas HML sem acesso a servicos reais
-        run: pdm run python manage.py test realtime.test_contas_hml --noinput --verbosity 2
+        run: pdm run python manage.py test realtime.test_contas_hml realtime.test_diagnostico_ticket_hml realtime.tests --noinput --verbosity 2
