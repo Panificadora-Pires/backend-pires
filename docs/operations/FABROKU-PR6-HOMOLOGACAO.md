@@ -147,6 +147,28 @@ python manage.py preparar_contas_hml
 
 **Não adicionar essas contas nem variáveis à aplicação principal, ao `.env` da Vercel em produção ou às branches `dev`/`main`.**
 
+## Gate 503 — ticket realtime não emitido (20/11/2026)
+
+**Evidências:** autenticação e REST HML `200`, HTTPS e Uvicorn OK, Redis 8.8.0 passou `PING` e `GETDEL` (duas execuções), mas `POST /api/realtime/ticket/` mantém `503` mesmo após o restart do container. O `diagnosticar_redis_hml` não exercita `REALTIME_ENABLED` nem `emitir_ticket()`, portanto não comprova a rota de ticket. O motivo real permanece em aberto.
+
+**Instrumentação HML-only:** a view passa a registrar somente uma linha por falha:
+- `ticket_hml reason=realtime_disabled`: flag `REALTIME_ENABLED` está `False` no **processo HTTP**;
+- `ticket_hml reason=emission_failed cause_type=ConnectionError` (ou outra classe): Redis/ticket falhou dentro da emissão; **sem** URI, usuário, ticket ou texto da exceção;
+- `ticket_hml reason=emission_failed cause_type=none`: falha lógica sem exceção encadeada, por exemplo SET NX não reservou chave.
+
+Além disso, o comando `python manage.py diagnosticar_ticket_hml` (restrito ao host HML e banco Neon) valida `REALTIME_ENABLED`, emite um ticket para ID fictício não existente `0` e o consome duas vezes via GETDEL. **Nenhum segredo é impresso ou persistido em logs**, e o ticket usado dura no máximo seu TTL habitual. Esse comando prova o caminho de criação/consumo no processo Django do console, mas não substitui verificar a **flag do web process** via logs da view.
+
+### Execução segura
+
+1. Fechar a aba do frontend local durante o diagnóstico para evitar novas tentativas automáticas de ticket.
+2. Aguardar CI [HML](https://github.com/Panificadora-Pires/backend-pires/actions) aprovar os testes. Fazer **Redeploy somente de `backend-pires-hml`** para carregar as alterações de instrumentação da branch `deploy/pr6-hml-asgi`; reiniciar não baixa o novo código.
+3. Confirmar HML `Running`, `GET /api/health/` OK, sem alteração de `DATABASE_URL`, `REDIS_URL` ou do banco da aplicação principal.
+4. Executar no console Fabroku exatamente `python manage.py diagnosticar_ticket_hml`, inspecionar o output na API de logs (não inferir sucesso pelo badge genérico CMD do Fabroku).
+5. Reabrir `http://localhost:5173/admin` (a sessão HML) e consultar os novos logs APP da HML buscando `ticket_hml reason=`. Se a rota passar a `200`, verificar handshake `wss://.../ws/v1/events/` `101` e não confundir com HMR Vite.
+6. Não compartilhar headers JWT, corpo dos tickets, `REDIS_URL`, nem connection string Neon. Só depois de `200` + `101` passar aos testes de grupos/chat/pedidos.
+
+**Este patch é temporário e não deve entrar em produção sem revisão/remoção da instrumentação.**
+
 ## 4. Habilitar realtime na HML
 
 Depois que HTTP e Redis privado estiverem validados, mudar somente na aplicação HML:
