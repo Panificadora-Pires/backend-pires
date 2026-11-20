@@ -103,6 +103,50 @@ A versão numérica acima é **exemplo, não descoberta**. Redis precisa oferece
 
 Se falhar, não ative `REALTIME_ENABLED`. Verifique o vínculo REDIS_URL e a conectividade interna da HML, sem alterar o banco Neon ou o PostgreSQL da produção. Se passar, siga para o próximo gate com Origin explícito, e depois handshake WSS/ticket HTTP autenticado.
 
+## Gate de contas fictícias HML — login sem e-mail real
+
+O PostgreSQL Neon `pires_hml` não contém contas da aplicação principal. A HML usa
+`EMAIL_BACKEND=django.core.mail.backends.locmem.EmailBackend`, que não envia e-mails.
+O cadastro público cria contas com `is_active=False` e exige código de verificação,
+portanto **não use** `seed_dados --permitir-producao` (senha conhecida).
+
+A branch exclusiva HML disponibiliza o comando Django `preparar_contas_hml`, que:
+- recusa executar fora do domínio `backend-pires-hml.class.fabricadesoftware.ifc.edu.br` e de banco hospedado em `.neon.tech`;
+- exige `HML_CONTAS_AUTORIZADAS=SIM` e três senhas **diferentes** de pelo menos 20 caracteres, validadas pelo Django;
+- em uma transação cria três e-mails fictícios do domínio reservado `.invalid`, com `is_active=True` e `email_verified=True`, sem enviar e-mails:
+  - admin `admin.hml@pires.invalid` (staff/superuser);
+  - cliente A `cliente-a.hml@pires.invalid`;
+  - cliente B `cliente-b.hml@pires.invalid`;
+- nunca imprime senhas nem as grava no Git; recusa reexecução se as contas já existirem.
+
+1. No PowerShell local, execute:
+
+```powershell
+1..3 | ForEach-Object { python -c "import secrets; print(secrets.token_urlsafe(32))" }
+```
+
+Guarde os três resultados privadamente na sequência (admin, cliente A, cliente B). Não compartilhe em chats, prints, arquivos versionados nem terminal do Fabroku.
+2. No painel **somente** da aplicação `backend-pires-hml`, adicione:
+
+```dotenv
+HML_CONTAS_AUTORIZADAS=SIM
+HML_ADMIN_PASSWORD=<SENHA_1_PRIVADA>
+HML_CLIENTE_A_PASSWORD=<SENHA_2_PRIVADA>
+HML_CLIENTE_B_PASSWORD=<SENHA_3_PRIVADA>
+```
+
+3. Faça **Redeploy** da **HML apenas**, após o commit do comando. Confirme `Running` e `GET /api/health/` OK.
+4. No console de comandos do Fabroku, execute exatamente:
+
+```text
+python manage.py preparar_contas_hml
+```
+
+5. Confirme `SUCCESS`. A saída contém somente **e-mails fictícios**, não senhas. Entre via frontend `http://localhost:5173` apontado à HML, com cada e-mail e sua respectiva senha privada.
+6. Assim que comprovar os logins, **exclua do painel da HML** as quatro variáveis temporárias `HML_*`, mantendo `DATABASE_URL`, `REDIS_URL` e `REALTIME_ENABLED=True`. A exclusão das variáveis não remove as contas existentes no Neon.
+
+**Não adicionar essas contas nem variáveis à aplicação principal, ao `.env` da Vercel em produção ou às branches `dev`/`main`.**
+
 ## 4. Habilitar realtime na HML
 
 Depois que HTTP e Redis privado estiverem validados, mudar somente na aplicação HML:
