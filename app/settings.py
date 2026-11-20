@@ -5,6 +5,8 @@ from pathlib import Path
 import dj_database_url
 from dotenv import load_dotenv
 
+from app.deploy_guard import exigir_banco_de_producao
+
 load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -358,8 +360,6 @@ TEMPLATES = [
 
 # Rejeita config de banco ausente/SQLite antes de atender requisições
 # quando DEBUG=False. A CI e o desenvolvimento com DEBUG=True seguem em SQLite.
-from app.deploy_guard import exigir_banco_de_producao
-
 exigir_banco_de_producao(
     debug=DEBUG,
     database_url=os.getenv('DATABASE_URL', ''),
