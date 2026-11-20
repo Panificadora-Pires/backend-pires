@@ -77,6 +77,32 @@ CSRF_TRUSTED_ORIGINS = FRONTEND_URLS
 # A API usa JWT em header Authorization; não depende de cookies entre origens.
 CORS_ALLOW_CREDENTIALS = False
 
+# PR6A.1: transporte opt-in. O Procfile WSGI e o polling seguem inalterados.
+# Redis privado e proxy WSS devem ser validados no Fabroku antes da ativação.
+REALTIME_ENABLED = env_bool('REALTIME_ENABLED', False)
+# Fabroku/Dokku vincula Redis como REDIS_URL; override exclusivo via REALTIME_REDIS_URL.
+REALTIME_REDIS_URL = (os.getenv('REALTIME_REDIS_URL') or os.getenv('REDIS_URL') or '').strip()
+REALTIME_ALLOWED_ORIGINS = env_list('REALTIME_ALLOWED_ORIGINS', ','.join(FRONTEND_URLS))
+REALTIME_TICKET_TTL_SECONDS = int(os.getenv('REALTIME_TICKET_TTL_SECONDS', '45'))
+REALTIME_MAX_CONNECTION_SECONDS = int(os.getenv('REALTIME_MAX_CONNECTION_SECONDS', '300'))
+
+if not 15 <= REALTIME_TICKET_TTL_SECONDS <= 120:
+    raise RuntimeError('REALTIME_TICKET_TTL_SECONDS deve estar entre 15 e 120.')
+if not 60 <= REALTIME_MAX_CONNECTION_SECONDS <= 900:
+    raise RuntimeError('REALTIME_MAX_CONNECTION_SECONDS deve estar entre 60 e 900.')
+if REALTIME_ENABLED:
+    if not REALTIME_REDIS_URL.startswith(('redis://', 'rediss://', 'unix://')):
+        raise RuntimeError('REALTIME_REDIS_URL deve apontar para um Redis privado válido.')
+    if not REALTIME_ALLOWED_ORIGINS:
+        raise RuntimeError('REALTIME_ALLOWED_ORIGINS precisa de origens explícitas.')
+    # Sem InMemoryChannelLayer em produção: grupos entre workers exigem Redis.
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels_redis.core.RedisChannelLayer',
+            'CONFIG': {'hosts': [REALTIME_REDIS_URL]},
+        },
+    }
+
 
 SECURE_PROXY_SSL_HEADER = (
     'HTTP_X_FORWARDED_PROTO',
@@ -265,6 +291,7 @@ INSTALLED_APPS = [
     'favoritos',
     'chat',
     'chatbot',
+    'realtime',
 ]
 
 if CLOUDINARY_URL:
@@ -467,6 +494,7 @@ REST_FRAMEWORK = {
         'password_reset': '20/hour',
         'chat_mensagem': os.getenv('THROTTLE_CHAT_MENSAGEM', '20/min'),
         'chatbot': os.getenv('THROTTLE_CHATBOT', '30/min'),
+        'realtime_ticket': os.getenv('THROTTLE_REALTIME_TICKET', '15/min'),
     },
 }
 

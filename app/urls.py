@@ -33,6 +33,7 @@ from core.views import (
 from favoritos.views import FavoritoViewSet
 from notificacoes.views import NotificacaoViewSet
 from pedidos.views import ExpirarPedidosView, HealthView, PedidoViewSet
+from realtime.views import RealtimeTicketView
 
 router = DefaultRouter()
 
@@ -128,6 +129,11 @@ urlpatterns = [
         name='admin_invite_register',
     ),
 
+    path(
+        'api/realtime/ticket/',
+        RealtimeTicketView.as_view(),
+        name='realtime-ticket',
+    ),
     path('api/', include(router.urls)),
 ]
 
