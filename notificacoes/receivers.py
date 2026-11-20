@@ -7,6 +7,7 @@ from django.dispatch import receiver
 
 from chat.signals import chat_lido_pelo_cliente, mensagem_da_padaria_enviada
 from pedidos.signals import pedido_ficou_pronto
+from realtime.events import publicar_evento
 
 from .models import Notificacao
 
@@ -37,9 +38,11 @@ def criar_notificacao_mensagem_chat(sender, mensagem, pedido, **kwargs):
 
 @receiver(chat_lido_pelo_cliente)
 def marcar_notificacao_chat_lida(sender, pedido, leitor, **kwargs):
-    Notificacao.objects.filter(
+    alteradas = Notificacao.objects.filter(
         usuario=leitor,
         pedido=pedido,
         mensagem=mensagem_notificacao_chat(pedido),
         lida=False,
     ).update(lida=True)
+    if alteradas:
+        publicar_evento('notificacao.alterada', usuario_id=leitor.pk, pedido_id=pedido.pk)

@@ -10,6 +10,7 @@ from django.utils import timezone
 from chat.models import Conversa, Mensagem
 from chat.signals import chat_lido_pelo_cliente, mensagem_da_padaria_enviada
 from pedidos.models import Pedido
+from realtime.events import publicar_evento
 
 STATUS_ENCERRADOS = {Pedido.Status.RETIRADO, Pedido.Status.CANCELADO}
 
@@ -86,6 +87,13 @@ def marcar_lidas(pedido, leitor):
     """Marca como lidas as mensagens do outro lado. Retorna quantas foram marcadas."""
 
     marcadas = mensagens_nao_lidas(leitor).filter(conversa__pedido=pedido).update(lida_em=timezone.now())
+    if marcadas:
+        publicar_evento(
+            'chat.leitura_atualizada',
+            usuario_id=pedido.usuario_id,
+            pedido_id=pedido.pk,
+            admin=True,
+        )
 
     if pedido.usuario_id == leitor.id and not leitor.is_staff:
         chat_lido_pelo_cliente.send(sender=Mensagem, pedido=pedido, leitor=leitor)

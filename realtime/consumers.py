@@ -10,6 +10,7 @@ _EVENTOS = frozenset({
     'pedido.criado',
     'pedido.atualizado',
     'chat.mensagem_nova',
+    'chat.leitura_atualizada',
     'notificacao.alterada',
 })
 _CAMPOS = frozenset({'v', 'tipo', 'pedido_id', 'event_id', 'emitido_em'})
