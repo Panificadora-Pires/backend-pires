@@ -44,6 +44,14 @@ Após concluir o reset das contas fictícias, **remover do painel privado soment
 
 Não apagar `DATABASE_URL`, `REDIS_URL`, `SECRET_KEY`, `REALTIME_ALLOWED_ORIGINS` nem alterar `REALTIME_ENABLED` inadvertidamente. Manter as novas senhas em gerenciador de senhas. Não expor valores nem usar botão `Exportar .env` em canal público.
 
+## Estado em 24/11/2026
+
+- **Entre workers na HML: aprovado.** Com `uvicorn --workers 2` e o Redis HML ([#70](https://github.com/Panificadora-Pires/backend-pires/pull/70)), 3 de 3 rodadas de `scripts/hml_pr7c_cross_worker.py` foram aprovadas. Cada rodada teve 12 WebSockets e 24 respostas HTTP atendidas por 2 PIDs. Todas as conexões do cliente A e do admin receberam os mesmos 7 eventos, e o cliente B recebeu 0. Pendente: reconexão medida após reinício do Redis ou do backend.
+- **Fase A pronta para revisão:** o `Procfile` usa `sh -c 'exec uvicorn app.asgi:application --host 0.0.0.0 --port "${PORT:-5000}" --ws wsproto --workers 2'`. É a mesma linha da HML, mas lê a porta de `PORT`. Com `REALTIME_ENABLED=False`, `app.asgi.application` é o `ASGIHandler` do Django puro, sem Redis (teste `realtime/test_asgi_sem_realtime.py`). Comando validado localmente com `PORT=8765`: dois workers e health 200. O `requirements.txt` usado pelo `build.sh` já contém `uvicorn`, `wsproto` e `channels`, e o `pip-audit` não encontrou vulnerabilidades.
+- **Release `main...dev` no backend:** nenhuma migration nova; as variáveis novas são só `REALTIME_*` e `THROTTLE_REALTIME_TICKET`, todas com padrão seguro (realtime desligado).
+- **Decisão sobre o Redis (responsável, 24/11/2026):** a cota do Fabroku está em 2/2. Quando os testes de realtime na HML terminarem, o `backend-pires-hml-redis` será apagado e um Redis exclusivo será criado para a produção, apenas na Fase B. A Fase A não usa Redis. Ao remover o Redis da HML, colocar `REALTIME_ENABLED=False` na HML, cujos testes de WebSocket deixam de ser possíveis.
+- **Rollback da Fase A:** voltar o `Procfile` para `gunicorn app.wsgi:application --log-file -` e fazer redeploy. Nenhuma migration está envolvida.
+
 ## Evidências e aprovação
 
 - [ ] Aprovação dos gates [#62](https://github.com/Panificadora-Pires/backend-pires/issues/62) e do QA escalabilidade [frontend #56](https://github.com/Panificadora-Pires/frontend-pires/issues/56).
