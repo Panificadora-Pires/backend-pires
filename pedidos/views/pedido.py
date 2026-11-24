@@ -1,15 +1,18 @@
 import logging
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 from django.conf import settings
 from django.db import IntegrityError, transaction
-from django.db.models import F, Sum
+from django.db.models import Count, F, Q, Sum
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status as http_status
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
 from rest_framework.mixins import CreateModelMixin, ListModelMixin, RetrieveModelMixin
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
@@ -34,6 +37,7 @@ from pedidos.services.pagamentos import (
     validar_assinatura_webhook,
 )
 from pedidos.services.pedido import criar_pedido_reservando_estoque
+from pedidos.services.relatorio_analitico import gerar_relatorio_analitico
 from pedidos.utils import gerar_qrcode_base64
 
 
@@ -57,17 +61,41 @@ class PedidoViewSet(
             Pedido.objects
             .select_related('usuario')
             .prefetch_related('itens__produto')
-            .order_by('-data')
+            .order_by('-data', '-pk')
         )
-        if usuario.is_staff:
+        if not usuario.is_staff:
+            return queryset.filter(usuario=usuario)
+
+        # Os filtros abaixo servem à listagem administrativa; detalhes,
+        # pagamentos e operações de status não dependem dos filtros da tela.
+        if self.action != 'list':
             return queryset
-        return queryset.filter(usuario=usuario)
+
+        pagamento = self.request.query_params.get('pagamento', '').strip()
+        if pagamento and pagamento not in Pedido.StatusPagamento.values:
+            raise ValidationError({'pagamento': 'Status de pagamento inválido.'})
+        if pagamento:
+            queryset = queryset.filter(status_pagamento=pagamento)
+
+        busca = self.request.query_params.get('busca', '').strip()
+        if len(busca) > 100:
+            raise ValidationError({'busca': 'Use no máximo 100 caracteres.'})
+        if busca:
+            criterio = (
+                Q(usuario__name__icontains=busca)
+                | Q(itens__produto__nome__icontains=busca)
+            )
+            if busca.isdecimal():
+                criterio |= Q(pk=int(busca))
+            queryset = queryset.filter(criterio).distinct()
+
+        return queryset
 
     def _resposta_checkout(self, pedido, *, status_code=http_status.HTTP_200_OK):
         pedido.refresh_from_db()
         return Response(
             {
-                'pedido': PedidoSerializer(pedido).data,
+                'pedido': PedidoSerializer(pedido, context=self.get_serializer_context()).data,
                 'pagamento': PagamentoPedidoSerializer(pedido).data,
             },
             status=status_code,
@@ -204,11 +232,24 @@ class PedidoViewSet(
                 from pedidos.services.pedido import devolver_estoque_pedido
                 devolver_estoque_pedido(pedido)
 
+            # A resposta bruta do Mercado Pago pode conter dados do pagador e ids
+            # internos: registra só os códigos de erro e não repassa o corpo ao cliente.
+            erros_mp = exc.data.get('errors') if isinstance(exc.data, dict) else None
+            codigos_mp = [
+                erro['code'][:64]
+                for erro in (erros_mp if isinstance(erros_mp, list) else [])[:10]
+                if isinstance(erro, dict) and isinstance(erro.get('code'), str)
+            ]
+            logger.warning(
+                'Checkout Mercado Pago recusado: pedido=%s status_http=%s codigos=%s',
+                pedido.id,
+                exc.status_code,
+                codigos_mp,
+            )
             return Response(
                 {
                     'detail': str(exc),
                     'novo_checkout': True,
-                    'provider': exc.data,
                 },
                 status=(
                     exc.status_code
@@ -255,7 +296,7 @@ class PedidoViewSet(
 
         return Response(
             {
-                'pedido': PedidoSerializer(pedido).data,
+                'pedido': PedidoSerializer(pedido, context=self.get_serializer_context()).data,
                 'pagamento': PagamentoPedidoSerializer(pedido).data,
                 'sincronizacao': sincronizacao,
             }
@@ -381,9 +422,12 @@ class PedidoViewSet(
             status=http_status.HTTP_200_OK,
         )
 
-    @extend_schema(summary='Obter QR Code de retirada')
-    @action(detail=True, methods=['get'])
+    @extend_schema(summary='Obter QR Code de retirada do próprio cliente')
+    @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated])
     def qrcode(self, request, pk=None):
+        # Funcionários validam o QR exibido pelo cliente; não recebem o segredo.
+        if request.user.is_staff:
+            raise PermissionDenied('O QR Code de retirada é exclusivo do cliente.')
         pedido = self.get_object()
         conteudo = str(pedido.codigo_retirada)
         return Response(
@@ -407,6 +451,100 @@ class PedidoViewSet(
             self.get_serializer(pedido).data,
             status=http_status.HTTP_200_OK,
         )
+
+    @extend_schema(summary='Resumo operacional dos pedidos para administradores')
+    @action(
+        detail=False,
+        methods=['get'],
+        permission_classes=[IsAdminUser],
+    )
+    def resumo_admin(self, request):
+        """Contagens no banco: independem da paginação da lista de pedidos."""
+        hoje = timezone.localdate()
+        contagens = Pedido.objects.aggregate(
+            total=Count('pk'),
+            pedidos_hoje=Count('pk', filter=Q(data__date=hoje)),
+            pendentes=Count('pk', filter=Q(status=Pedido.Status.PENDENTE)),
+            confirmados=Count('pk', filter=Q(status=Pedido.Status.CONFIRMADO)),
+            prontos=Count('pk', filter=Q(status=Pedido.Status.PRONTO)),
+            retirados=Count('pk', filter=Q(status=Pedido.Status.RETIRADO)),
+            cancelados=Count('pk', filter=Q(status=Pedido.Status.CANCELADO)),
+            pagamentos_pendentes=Count(
+                'pk',
+                filter=(
+                    ~Q(status=Pedido.Status.CANCELADO)
+                    & Q(status_pagamento__in=[
+                        Pedido.StatusPagamento.PENDENTE,
+                        Pedido.StatusPagamento.PROCESSANDO,
+                    ])
+                ),
+            ),
+        )
+        return Response({'data_referencia': hoje.isoformat(), **contagens})
+
+    @extend_schema(
+        summary='Relatório analítico administrativo com série diária e comparação',
+        parameters=[
+            OpenApiParameter(
+                'data_inicio', str, required=True,
+                description='Data inicial inclusiva no formato YYYY-MM-DD',
+            ),
+            OpenApiParameter(
+                'data_fim', str, required=True,
+                description='Data final inclusiva no formato YYYY-MM-DD (até 366 dias)',
+            ),
+        ],
+    )
+    @action(detail=False, methods=['get'], permission_classes=[IsAdminUser])
+    def relatorio_analitico_admin(self, request):
+        """Relatório agregado no banco, sem listar pedidos ou dados pessoais."""
+        inicio_texto = request.query_params.get('data_inicio')
+        fim_texto = request.query_params.get('data_fim')
+
+        if not inicio_texto or not fim_texto:
+            return Response(
+                {'detail': 'Informe data_inicio e data_fim no formato YYYY-MM-DD.'},
+                status=http_status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            if (
+                len(inicio_texto) != 10 or len(fim_texto) != 10
+                or inicio_texto[4] != '-' or inicio_texto[7] != '-'
+                or fim_texto[4] != '-' or fim_texto[7] != '-'
+            ):
+                raise ValueError('Formato de data inválido')
+            data_inicio = date.fromisoformat(inicio_texto)
+            data_fim = date.fromisoformat(fim_texto)
+        except (TypeError, ValueError):
+            return Response(
+                {'detail': 'Datas inválidas. Use o formato YYYY-MM-DD.'},
+                status=http_status.HTTP_400_BAD_REQUEST,
+            )
+
+        if data_inicio > data_fim:
+            return Response(
+                {'detail': 'data_inicio não pode ser posterior a data_fim.'},
+                status=http_status.HTTP_400_BAD_REQUEST,
+            )
+
+        duracao = (data_fim - data_inicio).days + 1
+        if duracao > 366:
+            return Response(
+                {'detail': 'O período deve ter no máximo 366 dias.'},
+                status=http_status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            # A comparação exige um período anterior de mesma duração.
+            data_inicio - timedelta(days=duracao)
+            data_fim + timedelta(days=1)
+        except OverflowError:
+            return Response(
+                {'detail': 'Escolha um período que permita comparação com datas anteriores.'},
+                status=http_status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response(gerar_relatorio_analitico(data_inicio, data_fim))
 
     @extend_schema(
         summary='Relatório de vendas por período',

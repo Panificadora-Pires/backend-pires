@@ -60,3 +60,21 @@ class ProdutoWriteSerializer(serializers.ModelSerializer):
             'ativo',
         ]
         read_only_fields = ['codigo', 'slug']
+
+class ProdutoAdminCatalogoSerializer(serializers.ModelSerializer):
+    """Uma linha completa da gestão de produtos, sem expor preço de custo."""
+    categoria_nome = serializers.CharField(source='categoria.nome', read_only=True)
+    preco_atual = serializers.DecimalField(
+        source='preco_efetivo', max_digits=7, decimal_places=2, read_only=True,
+    )
+    em_promocao = serializers.BooleanField(source='tem_promocao', read_only=True)
+    estoque_baixo = serializers.BooleanField(source='estoque_baixo_calculado', read_only=True)
+
+    class Meta:
+        model = Produto
+        fields = [
+            'id', 'codigo', 'nome', 'imagem', 'categoria', 'categoria_nome',
+            'preco', 'preco_atual', 'em_promocao', 'estoque', 'estoque_minimo',
+            'estoque_baixo', 'unidade_medida', 'ativo', 'destaque',
+        ]
+        read_only_fields = fields
