@@ -48,6 +48,16 @@ jobs:
       - name: Django system checks
         run: pdm run python manage.py check
 
+      - name: Django deployment checks (synthetic env, no real database)
+        env:
+          DEBUG: 'False'
+          SECRET_KEY: 'ci-only-fictitious-secret-not-for-real-server-20261120-check'
+          DATABASE_URL: 'postgresql://fake:fake@127.0.0.1:65432/never_connect'
+          ALLOWED_HOSTS: 'backend.example.invalid'
+          FRONTEND_URLS: 'https://frontend.example.invalid'
+          REALTIME_ENABLED: 'False'
+        run: pdm run python manage.py check --deploy
+
       - name: Ensure no missing migrations
         run: pdm run python manage.py makemigrations --check --dry-run
 
