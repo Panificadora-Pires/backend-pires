@@ -1,3 +1,4 @@
+from django.contrib.auth import get_user_model
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import serializers, status
 from rest_framework.exceptions import AuthenticationFailed
@@ -11,7 +12,9 @@ from rest_framework_simplejwt.serializers import (
     TokenRefreshSerializer,
     TokenVerifySerializer,
 )
+from rest_framework_simplejwt.settings import api_settings
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.utils import get_md5_hash_password
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
@@ -51,16 +54,41 @@ class CustomTokenObtainPairView(TokenObtainPairView):
     throttle_scope = 'login'
 
 
+class RevokeAwareTokenRefreshSerializer(TokenRefreshSerializer):
+    """Recusa renovar refresh de conta apagada ou emitido antes de uma troca de senha.
+
+    O SimpleJWT só confere a revogação (CHECK_REVOKE_TOKEN) ao autenticar com o access;
+    sem esta checagem, um refresh antigo seguiria rotacionando tokens inúteis.
+    """
+
+    def validate(self, attrs):
+        try:
+            refresh = self.token_class(attrs['refresh'])
+        except TokenError as exc:
+            raise AuthenticationFailed(str(exc), code='token_not_valid') from exc
+
+        user_id = refresh.payload.get(api_settings.USER_ID_CLAIM)
+        user = get_user_model().objects.filter(**{api_settings.USER_ID_FIELD: user_id}).first()
+        if user is None:
+            raise AuthenticationFailed('Sessão inválida. Entre novamente.', code='user_not_found')
+        if api_settings.CHECK_REVOKE_TOKEN and refresh.payload.get(
+            api_settings.REVOKE_TOKEN_CLAIM
+        ) != get_md5_hash_password(user.password):
+            raise AuthenticationFailed('A senha da conta foi alterada. Entre novamente.', code='password_changed')
+
+        return super().validate(attrs)
+
+
 @extend_schema_view(
     post=extend_schema(
         summary='Atualizar token JWT',
         description='Rotaciona o refresh token e retorna um novo access token.',
-        request=TokenRefreshSerializer,
-        responses={200: TokenRefreshSerializer, 401: None},
+        request=RevokeAwareTokenRefreshSerializer,
+        responses={200: RevokeAwareTokenRefreshSerializer, 401: None},
     )
 )
 class CustomTokenRefreshView(TokenRefreshView):
-    pass
+    serializer_class = RevokeAwareTokenRefreshSerializer
 
 
 @extend_schema_view(
