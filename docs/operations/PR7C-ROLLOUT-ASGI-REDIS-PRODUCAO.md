@@ -52,6 +52,19 @@ Não apagar `DATABASE_URL`, `REDIS_URL`, `SECRET_KEY`, `REALTIME_ALLOWED_ORIGINS
 - **Decisão sobre o Redis (responsável, 24/11/2026):** a cota do Fabroku está em 2/2. Quando os testes de realtime na HML terminarem, o `backend-pires-hml-redis` será apagado e um Redis exclusivo será criado para a produção, apenas na Fase B. A Fase A não usa Redis. Ao remover o Redis da HML, colocar `REALTIME_ENABLED=False` na HML, cujos testes de WebSocket deixam de ser possíveis.
 - **Rollback da Fase A:** voltar o `Procfile` para `gunicorn app.wsgi:application --log-file -` e fazer redeploy. Nenhuma migration está envolvida.
 
+### Comportamento do Fabroku observado na HML (24/11/2026)
+
+- **Editar** uma variável existente no painel **não** chega ao container nem com "Reiniciar". Só passou a valer depois de um **Redeploy**: `REALTIME_ENABLED=False` só desligou o ticket (503) após o redeploy. **Adicionar** variáveis reinicia a app. Na Fase B, ligar o `REALTIME_ENABLED` exige redeploy, e o rollback de emergência também.
+- "Reiniciar" e "Redeploy" são **sem tempo fora do ar**: `/api/health/` ficou 200 durante todo o processo. As conexões WebSocket abertas fecham com `1012`, e o frontend reconecta em cerca de 2 s.
+- **Reconexão aprovada:** depois do reinício, o frontend abriu um ticket e um WebSocket novos sozinho. Um evento do admin chegou em 2 s pela conexão nova. A expiração `4401` (300 s) reconecta em 2 s.
+- **Fallback aprovado:** com o realtime desligado, o ticket responde 503, o frontend não reabre o WebSocket e "Meus pedidos" continua atualizando por polling (cerca de 10 s), mostrando o pedido pronto sem recarregar.
+- **Com `REALTIME_ENABLED=True` e sem Redis, a app não sobe** (`settings.py` exige `REALTIME_REDIS_URL` válido). Por isso a ordem é: primeiro `REALTIME_ENABLED=False` + redeploy, depois remover o Redis.
+- O painel não tem ação para reiniciar o Redis nem para fazer backup do Postgres. O backup é feito pela CLI (`fabroku run dumpdata --django --output ...`).
+
+### Estado da HML após o PR7C
+
+`REALTIME_ENABLED=False`, `backend-pires-hml-redis` **removido** (24/11/2026) para liberar a cota. A HML segue útil para HTTP, pagamentos em sandbox e escala, mas não para WebSocket. Para voltar a testar realtime na HML, é preciso um Redis de novo.
+
 ## Evidências e aprovação
 
 - [ ] Aprovação dos gates [#62](https://github.com/Panificadora-Pires/backend-pires/issues/62) e do QA escalabilidade [frontend #56](https://github.com/Panificadora-Pires/frontend-pires/issues/56).
