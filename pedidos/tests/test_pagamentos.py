@@ -215,6 +215,48 @@ class CheckoutPagamentoTestCase(CriaUsuariosEProdutosMixin, APITestCase):
         assert self.coxinha.estoque == estoque
 
     @patch('pedidos.services.pagamentos.requests.post')
+    def test_erro_definitivo_do_mp_nao_expoe_resposta_bruta(self, post):
+        estoque = self.coxinha.estoque
+        resposta_mp = Mock(status_code=400)
+        resposta_mp.json.return_value = {
+            'message': 'payer.email pagador-mensagem@exemplo.invalid is invalid',
+            'errors': [{'code': 'invalid_payer', 'message': 'Payer invalido.'}, {'code': {'aninhado': 'x'}}],
+            'payer': {'email': 'pagador-interno@exemplo.invalid'},
+            'id': 'ORD01INTERNO',
+        }
+        post.return_value = resposta_mp
+        checkout_id = str(uuid4())
+
+        resposta = self.client.post(
+            '/api/pedidos/checkout_mercado_pago/',
+            {
+                'checkout_id': checkout_id,
+                'itens_criacao': self.itens(),
+                'payment_type': 'credit_card',
+                'form_data': {
+                    'payment_method_id': 'visa',
+                    'token': 'token-teste',
+                    'installments': 1,
+                    'payer': {'email': 'aluno@teste.com'},
+                },
+            },
+            format='json',
+        )
+
+        assert resposta.status_code == status.HTTP_400_BAD_REQUEST
+        assert resposta.data['novo_checkout'] is True
+        assert 'provider' not in resposta.data
+        assert 'pagador-interno@exemplo.invalid' not in resposta.content.decode()
+        assert 'ORD01INTERNO' not in resposta.content.decode()
+        assert 'pagador-mensagem@exemplo.invalid' not in resposta.content.decode()
+        pedido = Pedido.objects.get(checkout_id=checkout_id)
+        assert pedido.status == Pedido.Status.CANCELADO
+        assert pedido.status_pagamento == Pedido.StatusPagamento.ERRO
+        assert 'pagador-mensagem' not in pedido.mercadopago_status_detail
+        self.coxinha.refresh_from_db()
+        assert self.coxinha.estoque == estoque
+
+    @patch('pedidos.services.pagamentos.requests.post')
     def test_card_3ds_retorna_challenge_url(self, post):
         resposta_mp = Mock(status_code=201)
         resposta_mp.json.return_value = {

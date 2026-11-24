@@ -52,9 +52,10 @@ Veja `../contexto.md` (seção 6): fluxo de status, preço e estoque no servidor
 
 - Ruff: linha de 120 colunas, aspas simples, ordenação de imports. Docstrings e mensagens em português.
 - Variáveis novas entram em `.env.example` e `.env.production.example`, com comentário. Nunca versionar valores reais.
-- Conflito de migrations em desenvolvimento: apagar `db.sqlite3` e regenerar (nunca em produção).
+- Conflito de migrations: analisar o grafo e preservar os dados; não apagar o banco nem regenerar migrations existentes automaticamente.
+- Sem `.env`, o `DEBUG` padrão é `False` e o backend exige `DATABASE_URL` PostgreSQL (`app/deploy_guard.py`, PR #66). Em desenvolvimento, defina `DEBUG=True` no `.env`, como no `.env.example`.
 - `seed_dados` só roda com `DEBUG=True`.
 
 ## Commits
 
-Conventional Commits em português: `feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `chore:`. Autor Arthur Lanznaster, sem `Co-Authored-By` e sem rodapé do Claude. Branch da fase a partir da `main`; nunca direto na `main`.
+Conventional Commits em português: `feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `chore:`. Autor Arthur Lanznaster, sem `Co-Authored-By` e sem rodapé do Claude. Branch a partir da `dev` atualizada, PR para a `dev`; nunca direto na `dev` nem na `main`. Nunca mesclar `deploy/pr6-hml-asgi` (HML) em `dev`/`main`.

@@ -5,6 +5,8 @@ from pathlib import Path
 import dj_database_url
 from dotenv import load_dotenv
 
+from app.deploy_guard import exigir_banco_de_producao
+
 load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -35,9 +37,10 @@ def env_list(nome, padrao=''):
     ]
 
 
+# Fail closed: .env.example ativa DEBUG=True apenas em desenvolvimento.
 DEBUG = env_bool(
     'DEBUG',
-    True,
+    False,
 )
 
 SECRET_KEY = os.getenv(
@@ -314,6 +317,8 @@ MIDDLEWARE = [
         'django.middleware.clickjacking.'
         'XFrameOptionsMiddleware'
     ),
+    # Somente HML: PID do worker para o teste PR7C multiworker.
+    'realtime.hml_worker.HmlWorkerHeaderMiddleware',
 ]
 
 
@@ -354,6 +359,13 @@ TEMPLATES = [
     },
 ]
 
+
+# Rejeita config de banco ausente/SQLite antes de atender requisições
+# quando DEBUG=False. A CI e o desenvolvimento com DEBUG=True seguem em SQLite.
+exigir_banco_de_producao(
+    debug=DEBUG,
+    database_url=os.getenv('DATABASE_URL', ''),
+)
 
 DATABASES = {
     'default': dj_database_url.config(
