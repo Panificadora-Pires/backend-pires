@@ -317,6 +317,8 @@ MIDDLEWARE = [
         'django.middleware.clickjacking.'
         'XFrameOptionsMiddleware'
     ),
+    # Somente HML: PID do worker para o teste PR7C multiworker.
+    'realtime.hml_worker.HmlWorkerHeaderMiddleware',
 ]
 
 
