@@ -60,18 +60,11 @@ def _json_response(response):
         data = {}
 
     if response.status_code >= 400:
-        erros = data.get('errors') if isinstance(data, dict) else None
-        primeiro_erro = erros[0] if isinstance(erros, list) and erros else {}
-        detalhe = (
-            data.get('message')
-            or data.get('error')
-            or data.get('detail')
-            or primeiro_erro.get('message')
-            or primeiro_erro.get('code')
-            or 'O Mercado Pago recusou a solicitação.'
-        ) if isinstance(data, dict) else 'O Mercado Pago recusou a solicitação.'
+        # O texto de erro do Mercado Pago é livre e controlado por terceiro (pode citar
+        # dados do pagador). A mensagem da exceção chega ao cliente e ao pedido, então
+        # é fixa; o corpo fica em `data` apenas para uso interno.
         raise MercadoPagoError(
-            str(detalhe),
+            'O Mercado Pago recusou a solicitação.',
             status_code=response.status_code,
             data=data if isinstance(data, dict) else {},
         )
