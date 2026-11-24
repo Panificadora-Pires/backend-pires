@@ -232,11 +232,24 @@ class PedidoViewSet(
                 from pedidos.services.pedido import devolver_estoque_pedido
                 devolver_estoque_pedido(pedido)
 
+            # A resposta bruta do Mercado Pago pode conter dados do pagador e ids
+            # internos: registra só os códigos de erro e não repassa o corpo ao cliente.
+            erros_mp = exc.data.get('errors') if isinstance(exc.data, dict) else None
+            codigos_mp = [
+                erro['code'][:64]
+                for erro in (erros_mp if isinstance(erros_mp, list) else [])[:10]
+                if isinstance(erro, dict) and isinstance(erro.get('code'), str)
+            ]
+            logger.warning(
+                'Checkout Mercado Pago recusado: pedido=%s status_http=%s codigos=%s',
+                pedido.id,
+                exc.status_code,
+                codigos_mp,
+            )
             return Response(
                 {
                     'detail': str(exc),
                     'novo_checkout': True,
-                    'provider': exc.data,
                 },
                 status=(
                     exc.status_code
