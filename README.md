@@ -1,6 +1,6 @@
-# Pires Panificadora — Backend
+# Panificadora Pires - Backend
 
-API REST do sistema de pedidos antecipados da Pires Panificadora, Projeto Integrador do Curso Técnico em Informática do IFC — Campus Araquari. Ela cuida de contas e autenticação, catálogo, pedidos, estoque, pagamentos pelo Mercado Pago, retirada por QR Code, chat por pedido, assistente de dúvidas, notificações, favoritos e relatórios.
+API REST do sistema de pedidos antecipados da Panificadora Pires, Projeto Integrador do Curso Técnico em Informática do IFC — Campus Araquari. Ela cuida de contas e autenticação, catálogo, pedidos, estoque, pagamentos pelo Mercado Pago, retirada por QR Code, chat por pedido, assistente de dúvidas, notificações, favoritos e relatórios.
 
 - Documentação do projeto: [Panificadora-Pires](https://github.com/Panificadora-Pires/.github)
 - Frontend: [frontend-pires](https://github.com/Panificadora-Pires/frontend-pires) e [publicação](https://panificadora-pires.vercel.app)
