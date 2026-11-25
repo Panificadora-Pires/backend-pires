@@ -35,7 +35,6 @@ class CatalogoAdministrativoTestCase(APITestCase):
                 self.client.force_authenticate(user=self.aluno)
                 self.assertEqual(self.client.get(rota).status_code, 403)
                 self.client.force_authenticate(user=None)
-        # A listagem pública continua disponível ao aluno e não expõe dados internos.
         self.produto('Coxinha')
         self.client.force_authenticate(user=self.aluno)
         resposta = self.client.get('/api/produtos/')

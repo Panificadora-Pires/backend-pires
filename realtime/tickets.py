@@ -11,7 +11,6 @@ class TicketUnavailable(Exception):
 
 
 def _client():
-    # Import tardio mantém o backend HTTP WSGI atual independente de Redis.
     import redis
 
     if not settings.REALTIME_ENABLED or not settings.REALTIME_REDIS_URL:
@@ -60,7 +59,6 @@ def consumir_ticket(ticket):
     ):
         return None
     try:
-        # GETDEL é atômico; get+delete em duas chamadas seria vulnerável a replay.
         resposta = _client().getdel(_key(ticket))
     except Exception as error:
         raise TicketUnavailable('Redis indisponível ao consumir ticket.') from error

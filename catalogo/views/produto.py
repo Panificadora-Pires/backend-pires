@@ -296,7 +296,6 @@ class ProdutoViewSet(ModelViewSet):
             )[:limite]
         )
 
-        # Imagens de apenas alguns itens do ranking, sem consultar o catálogo inteiro.
         ranking = list(ranking)
         imagens = {
             produto.pk: request.build_absolute_uri(produto.imagem.url)

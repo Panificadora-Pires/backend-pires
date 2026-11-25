@@ -33,7 +33,6 @@ class EventsConsumer(AsyncWebsocketConsumer):
             await self.close(code=1013)
             return
         await self.accept(subprotocol='pires.v1')
-        # A sessão WS não dura indefinidamente depois de revogação da conta.
         self._expiracao_tarefa = asyncio.create_task(self._expirar_conexao())
 
     async def _expirar_conexao(self):
@@ -50,11 +49,9 @@ class EventsConsumer(AsyncWebsocketConsumer):
             try:
                 await self.channel_layer.group_discard(self.grupo, self.channel_name)
             except Exception:
-                # Desconexão não deve impedir cleanup quando Redis cair.
                 pass
 
     async def receive(self, text_data=None, bytes_data=None):
-        # PR6A.1 não recebe comandos: mutations permanecem nas APIs HTTP auditadas.
         await self.close(code=4403)
 
     async def realtime_event(self, event):

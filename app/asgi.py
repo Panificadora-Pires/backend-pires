@@ -5,7 +5,6 @@ from django.core.asgi import get_asgi_application
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'app.settings')
 
-# Inicializa Django antes de importar consumers/ORM.
 django_application = get_asgi_application()
 
 from django.conf import settings  # noqa: E402
@@ -25,5 +24,4 @@ if settings.REALTIME_ENABLED:
         ),
     })
 else:
-    # Na configuração atual de produção, ASGI segue servindo somente HTTP.
     application = django_application

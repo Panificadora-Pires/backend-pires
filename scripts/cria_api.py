@@ -5,7 +5,6 @@ import sys
 
 def create_files(entidade):
     print(f'Criando e abrindo arquivos para {entidade}...')
-    # Lista de comandos
     commands = [
         f'touch \
             core/models/{entidade}.py \
@@ -22,7 +21,6 @@ def create_files(entidade):
             app/urls.py',
     ]
 
-    # Executa cada comando
     for cmd in commands:
         os.system(cmd)
 

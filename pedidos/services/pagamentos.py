@@ -60,9 +60,6 @@ def _json_response(response):
         data = {}
 
     if response.status_code >= 400:
-        # O texto de erro do Mercado Pago é livre e controlado por terceiro (pode citar
-        # dados do pagador). A mensagem da exceção chega ao cliente e ao pedido, então
-        # é fixa; o corpo fica em `data` apenas para uso interno.
         raise MercadoPagoError(
             'O Mercado Pago recusou a solicitação.',
             status_code=response.status_code,
@@ -79,8 +76,6 @@ def _valor(valor):
 def _payer(form_data, pedido, *, eh_pix=False):
     payer_recebido = form_data.get('payer') or {}
 
-    # As credenciais sandbox da Orders API exigem dados de pagador próprios
-    # para os cenários oficiais de teste. Em produção usamos os dados reais.
     if settings.MERCADO_PAGO_SANDBOX:
         payer = {
             'email': (
@@ -168,8 +163,6 @@ def criar_order_mercado_pago(*, pedido, payment_type, form_data):
         'payment_method': metodo,
     }
 
-    # A Orders API aceita expiração de Pix a partir de 30 minutos. Usamos no
-    # mínimo 45 min para também comportar fluxos 3DS, que podem levar até 40 min.
     if eh_pix:
         minutos = max(int(settings.PAGAMENTO_TEMPO_LIMITE_MINUTOS), 45)
         pagamento['expiration_time'] = f'PT{minutos}M'
@@ -185,8 +178,6 @@ def criar_order_mercado_pago(*, pedido, payment_type, form_data):
         },
     }
 
-    # 3DS é acionado pelo Mercado Pago quando houver risco, sem forçar desafio
-    # em todas as compras. O challenge, quando necessário, é tratado no frontend.
     if not eh_pix:
         payload['config'] = {
             'online': {
@@ -205,8 +196,6 @@ def criar_order_mercado_pago(*, pedido, payment_type, form_data):
             timeout=settings.MERCADO_PAGO_TIMEOUT_SECONDS,
         )
     except requests.RequestException as exc:
-        # Em timeout não sabemos se a order foi criada. O usuário pode repetir
-        # o mesmo checkout e a mesma X-Idempotency-Key sem duplicar a cobrança.
         raise MercadoPagoError(
             'Não foi possível confirmar a resposta do Mercado Pago. Tente novamente.',
             status_code=503,
@@ -456,9 +445,6 @@ def preparar_cancelamento_financeiro(pedido):
         if not pode_limpar_order_antiga_sandbox:
             raise
 
-        # Orders antigas de teste podem deixar de existir para as credenciais
-        # sandbox atuais. Como não há dinheiro real e o pagamento local nunca
-        # foi aprovado, permitimos o cancelamento administrativo local.
         pedido.status_pagamento = Pedido.StatusPagamento.CANCELADO
         pedido.mercadopago_status = 'not_found'
         pedido.mercadopago_status_detail = 'sandbox_order_not_found'
@@ -504,8 +490,6 @@ def preparar_cancelamento_financeiro(pedido):
 
 
 def prazo_pagamento():
-    # 45 minutos cobre o mínimo do Pix (30 min) e o timeout máximo do challenge
-    # 3DS (40 min), mesmo que um .env antigo ainda esteja com valor menor.
     minutos = max(int(settings.PAGAMENTO_TEMPO_LIMITE_MINUTOS), 45)
     return timezone.now() + timedelta(minutes=minutos)
 
@@ -556,8 +540,6 @@ def validar_assinatura_webhook(*, x_signature, x_request_id, data_id, log_reject
     if not assinatura:
         return rejeitar('v1_missing')
 
-    # Preserve exatamente o case recebido em data.id.
-    # Orders usam IDs alfanuméricos e a assinatura é sensível a maiúsculas/minúsculas.
     manifest_parts = []
     if data_id:
         manifest_parts.append(f'id:{data_id};')
@@ -576,10 +558,6 @@ def validar_assinatura_webhook(*, x_signature, x_request_id, data_id, log_reject
     if hmac.compare_digest(esperado, assinatura_normalizada):
         return True
 
-    # Compatibilidade defensiva: a documentação atual de Orders/SDK preserva
-    # o case de data.id, mas há fluxos/documentação do próprio Mercado Pago
-    # que ainda usam o ID alfanumérico em lowercase no manifesto.
-    # Continuamos exigindo HMAC válido com o MESMO secret.
     if data_id and data_id.isalnum():
         data_id_lower = data_id.lower()
         if data_id_lower != data_id:

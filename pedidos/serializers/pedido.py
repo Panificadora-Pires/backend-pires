@@ -135,8 +135,6 @@ class PedidoSerializer(serializers.ModelSerializer):
     def get_fields(self):
         fields = super().get_fields()
         usuario = getattr(self.context.get('request'), 'user', None)
-        # Operadores podem validar códigos apresentados pelo cliente,
-        # mas não receber o segredo de retirada na API.
         if not usuario or not usuario.is_authenticated or usuario.is_staff:
             fields.pop('codigo_retirada', None)
         return fields

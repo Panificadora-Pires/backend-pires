@@ -29,7 +29,6 @@ class PedidoAdmin(admin.ModelAdmin):
         'usuario__name',
         'mercadopago_payment_id',
     ]
-    # O código de retirada é segredo do cliente, não um campo operacional.
     exclude = ['codigo_retirada']
     readonly_fields = [
         'checkout_id',

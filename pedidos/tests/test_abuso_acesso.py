@@ -50,7 +50,6 @@ class AcessoEntreClientesTests(CriaUsuariosEProdutosMixin, APITestCase):
         )
 
     def test_cliente_nao_le_dados_de_outro_usuario(self):
-        # Só /usuarios/me/ é aberta ao cliente; listar e detalhar exigem administrador.
         self.assertEqual(self.client.get(f'/api/usuarios/{self.aluno.id}/').status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(self.client.get('/api/usuarios/').status_code, status.HTTP_403_FORBIDDEN)
 

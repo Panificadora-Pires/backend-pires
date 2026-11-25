@@ -64,5 +64,3 @@ jobs:
       - name: Django test suite (temporary SQLite test DB)
         run: pdm run python manage.py test --noinput --verbosity 1
 
-# Não usa credenciais de produção nem serviços externos.
-# Integração real de OAuth, pagamento e deploy permanece validação separada.

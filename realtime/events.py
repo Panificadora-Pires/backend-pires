@@ -44,7 +44,6 @@ def _entregar(grupos, payload):
             return
         async_to_sync(_enviar_com_limite)(camada, grupos, payload)
     except Exception:
-        # Não registrar dados do Redis, segredos, payload ou informações do cliente.
         logger.warning('Sinal realtime não entregue: %s', payload['tipo'])
 
 

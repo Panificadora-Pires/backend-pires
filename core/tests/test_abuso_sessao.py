@@ -75,7 +75,6 @@ class AbusoSessaoTests(AuthAPITestCase):
 
         resposta = self.client.post(reverse('token_logout'), {'refresh': access}, format='json')
         self.assertEqual(resposta.status_code, status.HTTP_400_BAD_REQUEST)
-        # O refresh verdadeiro continua válido: o logout inválido não revogou nada.
         self.assertEqual(self.refresh(refresh).status_code, status.HTTP_200_OK)
 
     def test_token_adulterado_e_rejeitado(self):

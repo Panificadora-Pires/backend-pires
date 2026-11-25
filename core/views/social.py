@@ -233,8 +233,6 @@ class CustomGoogleLoginView(APIView):
                                 status=status.HTTP_409_CONFLICT,
                             )
 
-                        # Uma conta já verificada e inativa representa
-                        # suspensão administrativa e não deve ser reativada.
                         if (
                             usuario.email_verified
                             and not usuario.is_active
