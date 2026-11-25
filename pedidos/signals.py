@@ -9,5 +9,4 @@ notificações inteiro sem tocar em uma linha do app `pedidos`.
 
 import django.dispatch
 
-# Enviado com kwargs: pedido (instância de Pedido)
 pedido_ficou_pronto = django.dispatch.Signal()

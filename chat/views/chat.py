@@ -23,7 +23,6 @@ class ChatPedidoViewSet(GenericViewSet):
     permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
     pagination_class = None
     filter_backends = []
-    # Só o envio de mensagens tem escopo próprio (definido no @action); sem escopo, não há limite extra.
     throttle_scope = None
 
     def get_queryset(self):

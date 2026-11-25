@@ -169,9 +169,7 @@ class Pedido(models.Model):
         verbose_name_plural = 'Pedidos'
         ordering = ['-data']
         indexes = [
-            # Fila do admin, relatórios e rotina de expiração filtram por status + data da última mudança.
             models.Index(fields=['status', 'status_atualizado_em'], name='pedido_status_atualizado_idx'),
-            # Histórico do cliente.
             models.Index(fields=['usuario', '-data'], name='pedido_usuario_data_idx'),
         ]
 

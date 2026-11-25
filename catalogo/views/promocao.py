@@ -43,8 +43,6 @@ class PromocaoViewSet(ModelViewSet):
         elif situacao == 'encerrada':
             promocoes = promocoes.filter(data_fim__lt=hoje)
 
-        # Igual ao agrupamento editorial anterior: ativas, agendadas,
-        # encerradas. Desempate por ID garante paginação determinística.
         promocoes = promocoes.annotate(
             prioridade=Case(
                 When(data_fim__lt=hoje, then=Value(2)),

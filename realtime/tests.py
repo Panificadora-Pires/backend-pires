@@ -63,7 +63,6 @@ class TicketSegurancaTestCase(APITestCase):
                 self.assertIsNone(consumir_ticket(ticket))
                 self.assertEqual(len(ticket), 43)
             self.assertEqual(self.redis.ttls, [45, 45])
-            # Redis guarda somente hash do ticket, nunca o segredo bruto.
             self.assertTrue(all(chave.startswith('pires:realtime:ticket:') for chave in self.redis.dados))
 
     @override_settings(REALTIME_ENABLED=True)
@@ -76,7 +75,6 @@ class TicketSegurancaTestCase(APITestCase):
     def test_uso_unico_e_expiracao_fecham_acesso(self):
         with patch('realtime.tickets._client', return_value=self.redis):
             ticket = emitir_ticket(self.cliente)
-            # Simula TTL expirado no Redis, sem esperar 45 segundos.
             self.redis.dados.clear()
             self.assertIsNone(consumir_ticket(ticket))
             ticket = emitir_ticket(self.admin)

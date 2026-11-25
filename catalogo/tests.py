@@ -54,7 +54,6 @@ class PromocaoTestCase(APITestCase):
             data_fim=date.today() + timedelta(days=5),
         )
         self.client.force_authenticate(user=self.admin)
-        # nova promoção começando no meio do período da primeira -> deve ser rejeitada
         resposta = self.client.post(
             '/api/promocoes/',
             {
@@ -122,7 +121,6 @@ class ProdutoVisibilidadeTestCase(APITestCase):
         produto = Produto.objects.get(nome='Coxinha de frango')
         self.client.force_authenticate(user=self.admin)
         resposta = self.client.get(f'/api/produtos/{produto.id}/')
-        # o serializer de detalhe (usado no retrieve) também não deve expor preco_custo
         assert 'preco_custo' not in resposta.data
 
     def test_aluno_nao_cadastra_produto(self):

@@ -44,7 +44,6 @@ def pedido_salvo(sender, instance, created, raw, using, update_fields, **kwargs)
 def mensagem_salva(sender, instance, created, raw, using, **kwargs):
     if raw or not created or not settings.REALTIME_ENABLED:
         return
-    # Sem uma consulta extra quando o realtime está desativado.
     from chat.models import Conversa
 
     pedido = Conversa.objects.using(using).filter(pk=instance.conversa_id).values(

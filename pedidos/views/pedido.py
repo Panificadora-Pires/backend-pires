@@ -66,8 +66,6 @@ class PedidoViewSet(
         if not usuario.is_staff:
             return queryset.filter(usuario=usuario)
 
-        # Os filtros abaixo servem à listagem administrativa; detalhes,
-        # pagamentos e operações de status não dependem dos filtros da tela.
         if self.action != 'list':
             return queryset
 
@@ -224,16 +222,12 @@ class PedidoViewSet(
                 update_fields=['status_pagamento', 'mercadopago_status_detail']
             )
 
-            # Erro definitivo de validação/API: encerra a reserva para o usuário
-            # poder tentar novamente com um novo checkout.
             if pedido.status != Pedido.Status.CANCELADO:
                 pedido.status = Pedido.Status.CANCELADO
                 pedido.save(update_fields=['status'])
                 from pedidos.services.pedido import devolver_estoque_pedido
                 devolver_estoque_pedido(pedido)
 
-            # A resposta bruta do Mercado Pago pode conter dados do pagador e ids
-            # internos: registra só os códigos de erro e não repassa o corpo ao cliente.
             erros_mp = exc.data.get('errors') if isinstance(exc.data, dict) else None
             codigos_mp = [
                 erro['code'][:64]
@@ -322,7 +316,6 @@ class PedidoViewSet(
             log_rejection=not settings.MERCADO_PAGO_SANDBOX,
         )
 
-        # Em produção, HMAC inválido continua sendo rejeitado sem consultar a API.
         if not assinatura_valida and not settings.MERCADO_PAGO_SANDBOX:
             return Response(
                 {'detail': 'Assinatura de webhook inválida.'},
@@ -342,8 +335,6 @@ class PedidoViewSet(
 
         pedido_fallback = None
         if not assinatura_valida:
-            # No sandbox, o corpo do webhook inválido não é fonte de verdade.
-            # O fallback só existe para uma Order já conhecida localmente.
             pedido_fallback = Pedido.objects.filter(
                 mercadopago_order_id=str(data_id),
             ).first()
@@ -367,7 +358,6 @@ class PedidoViewSet(
             )
 
         try:
-            # Fonte de verdade: Orders API autenticada com o Access Token.
             remoto = consultar_order_mercado_pago(data_id)
         except MercadoPagoError:
             return Response(status=http_status.HTTP_503_SERVICE_UNAVAILABLE)
@@ -425,7 +415,6 @@ class PedidoViewSet(
     @extend_schema(summary='Obter QR Code de retirada do próprio cliente')
     @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated])
     def qrcode(self, request, pk=None):
-        # Funcionários validam o QR exibido pelo cliente; não recebem o segredo.
         if request.user.is_staff:
             raise PermissionDenied('O QR Code de retirada é exclusivo do cliente.')
         pedido = self.get_object()
@@ -535,7 +524,6 @@ class PedidoViewSet(
                 status=http_status.HTTP_400_BAD_REQUEST,
             )
         try:
-            # A comparação exige um período anterior de mesma duração.
             data_inicio - timedelta(days=duracao)
             data_fim + timedelta(days=1)
         except OverflowError:

@@ -9,7 +9,6 @@ from chat.services.chat import (
 
 from .mensagem import MensagemSerializer
 
-# Limite de mensagens devolvidas por consulta (as mais recentes).
 MAXIMO_MENSAGENS_EXIBIDAS = 200
 
 

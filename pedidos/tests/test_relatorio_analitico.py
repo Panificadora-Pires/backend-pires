@@ -65,9 +65,9 @@ class RelatorioAnaliticoAdminTestCase(CriaUsuariosEProdutosMixin, APITestCase):
             ('19-11-2026', '2026-11-19'),
             ('20261118', '2026-11-19'),
             ('2026-02-30', '2026-03-01'),
-            ('2025-01-01', '2026-01-02'),  # 367 dias
-            ('0001-01-01', '0001-01-01'),  # sem período anterior representável
-            ('9999-12-31', '9999-12-31'),  # não existe meia-noite seguinte
+            ('2025-01-01', '2026-01-02'),
+            ('0001-01-01', '0001-01-01'),
+            ('9999-12-31', '9999-12-31'),
         ]:
             with self.subTest(inicio=inicio, fim=fim):
                 self.assertEqual(self.consultar(inicio, fim).status_code, status.HTTP_400_BAD_REQUEST)
@@ -103,10 +103,8 @@ class RelatorioAnaliticoAdminTestCase(CriaUsuariosEProdutosMixin, APITestCase):
             momento=self.instante('2026-11-17'), forma=Pedido.FormaPagamento.CARTAO,
             itens=[(self.suco, 1, '10.00')],
         )
-        # Valores antigos devem sobreviver a mudanças de preço no catálogo.
         self.coxinha.preco = Decimal('49.99')
         self.coxinha.save()
-        # Estados não concluídos e cancelados não entram no resultado.
         self.pedido(
             momento=self.instante('2026-11-19'), status_pedido=Pedido.Status.CANCELADO,
             itens=[(self.suco, 1, '999.00')],
@@ -146,12 +144,10 @@ class RelatorioAnaliticoAdminTestCase(CriaUsuariosEProdutosMixin, APITestCase):
         self.assertEqual(sum(p['total_pedidos'] for p in pagamentos.values()), 2)
 
     def test_virada_da_meia_noite_de_sao_paulo_e_periodo_inclusivo(self):
-        # 01h30 UTC = 22h30 em São Paulo do dia anterior.
         self.pedido(
             momento=datetime(2026, 11, 19, 1, 30, tzinfo=ZoneInfo('UTC')),
             itens=[(self.coxinha, 1, '7.00')],
         )
-        # 03h15 UTC = 00h15 de 19/11 em São Paulo.
         self.pedido(
             momento=datetime(2026, 11, 19, 3, 15, tzinfo=ZoneInfo('UTC')),
             itens=[(self.suco, 1, '6.00')],

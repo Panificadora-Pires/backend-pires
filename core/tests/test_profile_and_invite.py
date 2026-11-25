@@ -11,10 +11,6 @@ from core.models import AdminInvite, User
 from core.tests.base import AuthAPITestCase
 
 
-# PNG RGB 1x1 válido.
-#
-# O fixture anterior possuía checksum inválido no chunk IDAT e o Pillow,
-# corretamente, rejeitava o upload antes de chegar à regra de negócio.
 PNG_1X1 = base64.b64decode(
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1Pe'
     'AAAADElEQVR4nGP4//8/AAX+Av4N70a4AAAAAElFTkSuQmCC'

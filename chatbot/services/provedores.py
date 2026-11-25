@@ -16,8 +16,6 @@ from django.utils.module_loading import import_string
 class Resposta:
     intencao: str
     texto: str
-    # Cada ação: {'tipo': 'intencao', 'rotulo', 'valor'}, {'tipo': 'chat', 'rotulo', 'pedido'}
-    # ou {'tipo': 'rota', 'rotulo', 'rota'}.
     acoes: list = field(default_factory=list)
     pedidos: list = field(default_factory=list)
     produtos: list = field(default_factory=list)

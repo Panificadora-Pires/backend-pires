@@ -15,11 +15,9 @@ class RelatorioVendasTestCase(CriaUsuariosEProdutosMixin, APITestCase):
         self.criar_usuarios()
         self.criar_produtos()
 
-        # pedido retirado hoje: 2 coxinhas a R$8 = R$16
         pedido = Pedido.objects.create(usuario=self.aluno, status=Pedido.Status.RETIRADO)
         ItemPedido.objects.create(pedido=pedido, produto=self.coxinha, quantidade=2, preco_unitario=8)
 
-        # pedido ainda pendente não deve contar no relatório
         pedido_pendente = Pedido.objects.create(usuario=self.aluno, status=Pedido.Status.PENDENTE)
         ItemPedido.objects.create(pedido=pedido_pendente, produto=self.coxinha, quantidade=5, preco_unitario=8)
 
@@ -71,7 +69,6 @@ class ProdutosMaisVendidosTestCase(CriaUsuariosEProdutosMixin, APITestCase):
         pedido2 = Pedido.objects.create(usuario=self.aluno, status=Pedido.Status.RETIRADO)
         ItemPedido.objects.create(pedido=pedido2, produto=self.coxinha, quantidade=3, preco_unitario=8)
 
-        # pedido cancelado não deve contar no ranking
         pedido_cancelado = Pedido.objects.create(usuario=self.aluno, status=Pedido.Status.CANCELADO)
         ItemPedido.objects.create(pedido=pedido_cancelado, produto=self.suco, quantidade=50, preco_unitario=6)
 
@@ -87,7 +84,7 @@ class ProdutosMaisVendidosTestCase(CriaUsuariosEProdutosMixin, APITestCase):
         assert resposta.status_code == status.HTTP_200_OK
         resultado = resposta.data['resultado']
         assert resultado[0]['produto_nome'] == 'Coxinha de frango'
-        assert resultado[0]['quantidade_vendida'] == self.quantidade_coxinha_vendida  # 5 + 3, ignora o pedido cancelado
+        assert resultado[0]['quantidade_vendida'] == self.quantidade_coxinha_vendida
         assert resultado[1]['produto_nome'] == 'Suco de laranja'
         assert resultado[1]['quantidade_vendida'] == 1
 

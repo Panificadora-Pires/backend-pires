@@ -149,7 +149,6 @@ class NotificacaoPedidoProntoTestCase(CriaUsuariosEProdutosMixin, APITestCase):
         self.pedido.save()
 
         self.client.force_authenticate(user=self.admin)
-        # tenta "reafirmar" pronto -> RN04 nem deveria permitir (pronto não transiciona pra pronto)
         self.client.patch(f'/api/pedidos/{self.pedido.id}/alterar_status/', {'status': 'pronto'}, format='json')
 
         assert Notificacao.objects.filter(usuario=self.aluno).count() == 0
