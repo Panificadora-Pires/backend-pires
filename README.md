@@ -1,624 +1,121 @@
-# Pires Panificadora — Backend
+# Panificadora Pires - Backend
 
-API REST do sistema de pedidos da Pires Panificadora.
+API REST do sistema de pedidos antecipados da Panificadora Pires, Projeto Integrador do Curso Técnico em Informática do IFC — Campus Araquari. Ela cuida de contas e autenticação, catálogo, pedidos, estoque, pagamentos pelo Mercado Pago, retirada por QR Code, chat por pedido, assistente de dúvidas, notificações, favoritos e relatórios.
 
-O backend é responsável por autenticação, catálogo, favoritos, pedidos, pagamentos, estoque, notificações, retirada por QR Code, relatórios e administração.
+- Documentação do projeto: [Panificadora-Pires](https://github.com/Panificadora-Pires/.github)
+- Frontend: [frontend-pires](https://github.com/Panificadora-Pires/frontend-pires) e [publicação](https://panificadora-pires.vercel.app)
+- API publicada: https://backend-pires.class.fabricadesoftware.ifc.edu.br/api/
 
-## Stack
+O projeto Django se chama `app` e está dividido em aplicações por domínio:
 
-- Python 3.12
-- Django 5.2
-- Django REST Framework
-- SimpleJWT
-- django-filter
-- drf-spectacular
-- PostgreSQL
-- SQLite para desenvolvimento
-- Cloudinary
-- WhiteNoise
-- Gunicorn
-- Requests
-- Google Auth
-- Mercado Pago Orders API
-- PDM
+- `core`: usuário customizado (login por e-mail), confirmação de e-mail, redefinição de senha, login com o Google e convites de administrador.
+- `catalogo`: categorias, produtos e promoções.
+- `pedidos`: pedidos, reserva de estoque, pagamentos (Mercado Pago), retirada por QR Code, cancelamento automático e relatórios.
+- `favoritos`, `notificacoes`, `chat` (conversa por pedido) e `chatbot` (perguntas frequentes).
+- `realtime`: atualização em tempo real por WebSocket (Django Channels e Redis), opcional.
 
-## URL de produção
+A regra de negócio fica em `services/` de cada aplicação. As aplicações conversam por sinais (`signals`), sem importar umas às outras.
 
-API:
+## Instalação e Configuração
 
-```text
-https://backend-pires.class.fabricadesoftware.ifc.edu.br/api
+1. Tenha o [Python 3.12](https://www.python.org/) e o [PDM](https://pdm-project.org/) instalados.
+
+2. Clone o repositório e entre na pasta:
+
+   ```
+   git clone https://github.com/Panificadora-Pires/backend-pires.git
+   cd backend-pires
+   ```
+
+3. Instale as dependências:
+
+   ```
+   pdm install
+   ```
+
+4. Crie o arquivo `.env` a partir do `.env.example`. Ele já vem pronto para desenvolvimento, com SQLite e `DEBUG=True`:
+
+   ```
+   cp .env.example .env
+   ```
+
+5. Crie o banco e, se quiser, carregue dados fictícios de exemplo (um administrador e três clientes, com produtos e pedidos):
+
+   ```
+   pdm run migrate
+   pdm run seed_dados
+   ```
+
+6. Execute o servidor de desenvolvimento:
+
+   ```
+   pdm run dev
+   ```
+
+7. Acesse a API em http://127.0.0.1:8000/api/ e confira se ela está no ar em http://127.0.0.1:8000/api/health/.
+
+Para pagar com Pix ou cartão no ambiente local, preencha no `.env` as credenciais de teste do Mercado Pago (`MERCADO_PAGO_ACCESS_TOKEN` e `MERCADO_PAGO_SANDBOX=True`). O pagamento em dinheiro funciona sem configuração extra.
+
+## Uso da API
+
+Com `ENABLE_API_DOCS=True` (padrão do `.env.example`), a documentação completa dos endpoints fica disponível em:
+
+- Swagger: http://127.0.0.1:8000/api/doc/
+- ReDoc: http://127.0.0.1:8000/api/redoc/
+- Esquema OpenAPI: http://127.0.0.1:8000/api/schema/
+
+Na produção a documentação fica desligada.
+
+A autenticação usa JWT: `POST /api/token/` devolve o `access` e o `refresh`, e o `access` vai no cabeçalho `Authorization: Bearer <access>`. Por padrão, toda rota exige login; as rotas públicas (cadastro, login, confirmação de e-mail, Google, webhook do Mercado Pago e `health`) são declaradas de propósito. O cliente vê apenas os próprios dados, e o administrador (`is_staff`) vê tudo.
+
+## Comandos Úteis
+
+- `pdm run dev`: executa o servidor de desenvolvimento em http://127.0.0.1:8000.
+- `pdm run migrate` e `pdm run makemigrations`: aplicam e criam as migrações.
+- `pdm run seed_dados`: cria dados fictícios de exemplo (só roda com `DEBUG=True`).
+- `pdm run createsuperuser`: cria um administrador.
+- `pdm run test`: executa os testes.
+- `pdm run django_check`: verifica a configuração do Django.
+- `pdm run lint` e `pdm run format`: verificam e formatam o código com o Ruff.
+- `pdm run shellp`: abre o shell do Django com todos os modelos importados.
+- `pdm run python manage.py cancelar_pedidos_expirados`: cancela os pedidos vencidos. Na produção, um workflow do GitHub chama o endpoint de manutenção a cada 10 minutos.
+- Para mais detalhes, veja a seção `[tool.pdm.scripts]` do `pyproject.toml`.
+
+## Testes
+
+Antes de abrir um pull request, rode:
+
 ```
-
-Frontend autorizado:
-
-```text
-https://frontend-pires.vercel.app
-```
-
-## Arquitetura
-
-O projeto é dividido por domínio:
-
-```text
-app/            → configuração global do Django
-core/           → usuários, autenticação, convites, verificação e permissões
-catalogo/       → categorias, produtos e promoções
-chat/           → chat por pedido entre o cliente e a padaria
-chatbot/        → chatbot de ajuda (regras + FAQ editável)
-favoritos/      → produtos favoritados
-notificacoes/   → notificações dos usuários
-pedidos/        → pedidos, estoque, pagamentos, QR Code e relatórios
-scripts/        → scripts auxiliares
-```
-
-Nos módulos maiores, models, serializers e views ficam separados em arquivos próprios.
-
-## Desenvolvimento local
-
-### Pré-requisitos
-
-- Python 3.12
-- PDM
-
-### Instalação
-
-```bash
-pdm install
-```
-
-Aplique as migrations:
-
-```bash
-pdm run python manage.py migrate
-```
-
-Opcionalmente, carregue os dados de exemplo:
-
-```bash
-pdm run python manage.py seed_dados
-```
-
-Execute o servidor:
-
-```bash
-pdm run python manage.py runserver
-```
-
-Se o projeto possuir o script `dev` configurado no PDM, também pode ser utilizado:
-
-```bash
-pdm dev
-```
-
-API local:
-
-```text
-http://127.0.0.1:8000/api
-```
-
-## Comandos úteis
-
-```bash
-pdm run python manage.py check
-pdm run python manage.py makemigrations --check
-pdm run python manage.py migrate
 pdm run python manage.py test
-pdm run python manage.py test pedidos
-pdm run python manage.py collectstatic --noinput
-```
-
-Para popular o banco:
-
-```bash
-pdm run python manage.py seed_dados
-```
-
-Para limpar e recriar os dados de exemplo, quando suportado pelo comando:
-
-```bash
-pdm run python manage.py seed_dados --limpar
-```
-
-Para executar o cancelamento de pedidos expirados:
-
-```bash
-pdm run python manage.py cancelar_pedidos_expirados
-```
-
-## Documentação da API
-
-Quando habilitado no projeto:
-
-```text
-/api/doc/       → Swagger UI
-/api/schema/    → OpenAPI
-/admin/         → Django Admin
-```
-
-## Banco de dados
-
-Em desenvolvimento existe fallback para SQLite.
-
-Em produção é utilizado PostgreSQL através de:
-
-```env
-DATABASE_URL=
-```
-
-## Arquivos e imagens
-
-Em produção, uploads devem ser persistidos através do Cloudinary:
-
-```env
-CLOUDINARY_URL=
-```
-
-Sem storage persistente, arquivos enviados para o filesystem da instância podem ser perdidos após restart ou redeploy.
-
-## Autenticação
-
-A autenticação utiliza JWT através do SimpleJWT.
-
-O sistema também possui recursos de:
-
-- registro;
-- login;
-- refresh de token;
-- login Google;
-- verificação de conta;
-- recuperação de senha;
-- perfil;
-- convites administrativos.
-
-No login Google, a URL `picture` do token verificado é guardada em `google_avatar_url`, aceitando somente HTTPS em domínios `googleusercontent.com`. Nenhuma imagem é baixada pelo servidor. O campo de resposta `avatar` mantém o contrato atual: foto enviada pelo usuário tem prioridade; na ausência dela, retorna a foto Google. Contas existentes recebem essa foto no próximo login Google.
-
-A ação `remove_avatar` limpa a foto enviada e a alternativa Google; um novo login Google poderá importar novamente a foto da conta. O campo interno não pode ser alterado pelo PATCH de perfil. A migration aditiva `core.0010_user_google_avatar_url` deve ser aplicada antes de executar o backend atualizado (`python manage.py migrate`); não altera uploads ou dados financeiros existentes.
-
-As rotas protegidas utilizam:
-
-```http
-Authorization: Bearer <access_token>
-```
-
-O sistema diferencia usuários comuns e administração por permissões do backend. Um usuário não deve conseguir promover a própria conta através de endpoint público.
-
-## Catálogo
-
-O módulo `catalogo` é responsável por:
-
-- categorias;
-- produtos;
-- preços;
-- estoque;
-- promoções;
-- validações de promoção;
-- dados utilizados pelo cardápio.
-
-As validações de preço e disponibilidade devem sempre ocorrer no backend.
-
-## Favoritos
-
-O módulo `favoritos` gerencia produtos favoritados pelos usuários.
-
-O frontend possui serviço e store próprios para essa funcionalidade, mas a persistência pertence ao backend.
-
-## Notificações
-
-O módulo `notificacoes` registra avisos destinados aos usuários.
-
-Entre os usos do sistema está a notificação quando um pedido fica pronto para retirada.
-
-Também avisa o cliente quando a padaria responde no chat do pedido (no máximo uma notificação não lida por pedido; ela é marcada como lida quando o cliente abre o chat).
-
-## Chat por pedido
-
-O módulo `chat` mantém **uma conversa por pedido** entre o cliente dono do pedido e a administração. A conversa é criada na primeira mensagem. Mensagens são texto puro (sem HTML e sem anexos); o frontend deve exibi-las sempre como texto.
-
-| Método e rota | Quem | O que faz |
-|---|---|---|
-| `GET /api/chat/{pedido_id}/` | dono do pedido ou admin | Mensagens (até as 200 mais recentes), `somente_leitura`, `encerra_em` e `nao_lidas` do leitor |
-| `POST /api/chat/{pedido_id}/mensagens/` | dono do pedido ou admin | Envia `{"texto": "..."}`; throttle `chat_mensagem` |
-| `POST /api/chat/{pedido_id}/marcar_lidas/` | dono do pedido ou admin | Marca como lidas as mensagens do outro lado |
-| `GET /api/chat/nao_lidas/` | logado | `{"total", "por_pedido": [{"pedido", "nao_lidas"}]}`; o cliente vê só os próprios pedidos e o admin vê todos |
-
-Regras:
-
-- Cliente que tenta acessar o chat de outro pedido recebe 404.
-- Autor e lado da conversa (`enviada_pela_padaria`) vêm do servidor, nunca do corpo. A resposta não expõe e-mail nem nome do autor.
-- Texto obrigatório, sem caracteres de controle (exceto quebra de linha), com até `CHAT_MENSAGEM_TAMANHO_MAXIMO` caracteres (padrão 1000).
-- Depois de `retirado` ou `cancelado`, o chat aceita mensagens por mais `CHAT_PRAZO_APOS_ENCERRAMENTO_HORAS` (padrão 24 h) e então fica somente leitura (envio responde 400).
-- Mensagem da padaria dispara o signal `chat.signals.mensagem_da_padaria_enviada`, que o app `notificacoes` usa para avisar o cliente.
-
-## Chatbot de ajuda
-
-O módulo `chatbot` responde dúvidas comuns por **regras + FAQ**, sem IA externa. Nada da conversa é gravado.
-
-| Método e rota | O que faz |
-|---|---|
-| `GET /api/chatbot/inicio/` | Saudação e botões com os assuntos sugeridos |
-| `POST /api/chatbot/mensagem/` | `{"texto": "..."}` (até 300 caracteres) ou `{"intencao": "retirada"}` (botão); throttle `chatbot` |
-
-Toda resposta tem o formato `{intencao, texto, acoes, pedidos, produtos}`. Cada ação é um destes tipos:
-
-- `{tipo: "intencao", rotulo, valor}`: próximo assunto;
-- `{tipo: "chat", rotulo, pedido}`: abre o chat do pedido;
-- `{tipo: "rota", rotulo, rota}`: leva a `cardapio` ou `pedidos`.
-
-Como funciona:
-
-- **FAQ editável no admin** (`PerguntaFrequente`): pergunta (texto do botão), palavras-chave, resposta, ordem, sugerida e ativa. As palavras-chave não diferenciam maiúsculas nem acentos; `*` no fim aceita variações (`cancel*`). A resposta aceita `{minutos_retirada}` e `{minutos_pagamento}`, preenchidos com os prazos configurados. A FAQ inicial vem da migration `chatbot.0002_faq_inicial`.
-- **Intenções com dados do usuário:**
-  - `meus_pedidos`: status dos pedidos **do próprio usuário**;
-  - `falar_com_padaria`: botões para o chat dos pedidos com conversa aberta;
-  - `disponibilidade`: se o produto citado está disponível ou esgotado, sem revelar a quantidade em estoque.
-- Ganha a intenção com mais palavras-chave encontradas; em empate, vale a FAQ. Sem correspondência, a resposta é o `fallback` com sugestões.
-- **Plugar IA depois:** crie uma subclasse de `chatbot.services.provedores.ProvedorResposta` que devolva `Resposta` e aponte `CHATBOT_PROVEDOR` para ela.
-
-## Pedidos
-
-O módulo `pedidos` concentra:
-
-- criação do pedido;
-- itens;
-- cálculo de total;
-- estoque;
-- status;
-- cancelamento;
-- pagamentos;
-- Mercado Pago;
-- QR Code;
-- retirada;
-- relatórios.
-
-## Fluxo do pedido
-
-Fluxo principal:
-
-```text
-pendente
-   ↓
-confirmado
-   ↓
-pronto
-   ↓
-retirado
-```
-
-Cancelamentos podem ocorrer antes da retirada, respeitando as regras de negócio e a conciliação financeira.
-
-O sistema impede transições inválidas entre estados.
-
-## Estoque
-
-A lógica de estoque é tratada no backend.
-
-Entre as regras implementadas:
-
-- baixa de estoque ao criar/reservar um pedido;
-- validação de estoque suficiente;
-- devolução de estoque em cancelamentos aplicáveis;
-- proteção contra alteração indevida pelo frontend.
-
-## Cancelamento automático
-
-Existe o management command:
-
-```bash
-python manage.py cancelar_pedidos_expirados
-```
-
-Ele trata pedidos que ultrapassam o limite configurado para retirada.
-
-Variável relacionada:
-
-```env
-PEDIDO_TEMPO_LIMITE_RETIRADA_MINUTOS=
-```
-
-## QR Code de retirada
-
-Cada pedido possui um código de retirada.
-
-O cliente pode visualizar o QR Code e a administração pode confirmar a retirada por leitura da câmera ou entrada manual.
-
-A retirada só deve ser concluída quando o pedido estiver em estado compatível.
-
-## Pagamentos
-
-O checkout suporta:
-
-- dinheiro na retirada;
-- Pix;
-- cartão.
-
-Os pagamentos eletrônicos utilizam o Mercado Pago Orders API.
-
-### Responsabilidades
-
-Frontend:
-
-```text
-Public Key
-Payment Brick
-interface do checkout
-```
-
-Backend:
-
-```text
-Access Token
-criação da Order
-validação do pagamento
-webhook
-conciliação
-status financeiro
-```
-
-Nunca confie em preço ou status financeiro enviados pelo frontend.
-
-## Mercado Pago
-
-Variáveis essenciais:
-
-```env
-MERCADO_PAGO_ACCESS_TOKEN=
-MERCADO_PAGO_WEBHOOK_SECRET=
-MERCADO_PAGO_WEBHOOK_URL=
-MERCADO_PAGO_API_BASE_URL=https://api.mercadopago.com
-MERCADO_PAGO_TIMEOUT_SECONDS=15
-MERCADO_PAGO_SANDBOX=False
-PAGAMENTO_TEMPO_LIMITE_MINUTOS=45
-```
-
-Em produção:
-
-```env
-MERCADO_PAGO_SANDBOX=False
-```
-
-A Public Key do frontend e o Access Token do backend devem pertencer à mesma aplicação Mercado Pago.
-
-### Pix em produção
-
-A conta Mercado Pago vinculada à aplicação deve possuir uma chave Pix cadastrada e ativa.
-
-Sem chave Pix, a criação da transação pode falhar mesmo que Access Token, Public Key e Webhook estejam corretos.
-
-## Webhook Mercado Pago
-
-Endpoint:
-
-```text
-POST /api/pedidos/mercado_pago_webhook/
-```
-
-Evento configurado:
-
-```text
-Order (Mercado Pago)
-```
-
-URL de produção:
-
-```text
-https://backend-pires.class.fabricadesoftware.ifc.edu.br/api/pedidos/mercado_pago_webhook/
-```
-
-O webhook deve responder `200` depois de receber e tratar corretamente a notificação.
-
-Um `200` no webhook significa que a notificação foi recebida. Não significa, por si só, que o pagamento foi aprovado. Eventos como `order.failed` também podem ser entregues com sucesso ao webhook.
-
-Em produção, assinaturas HMAC inválidas devem ser rejeitadas.
-
-## Variáveis de ambiente de produção
-
-Exemplo para o Fabroku:
-
-```env
-DEBUG=False
-SECRET_KEY=<SEGREDO_FORTE_E_NOVO>
-
-ALLOWED_HOSTS=backend-pires.class.fabricadesoftware.ifc.edu.br
-FRONTEND_URLS=https://frontend-pires.vercel.app
-
-DATABASE_URL=<POSTGRES_PRODUCAO>
-CLOUDINARY_URL=<CLOUDINARY_PRODUCAO>
-
-GOOGLE_CLIENT_ID=<CLIENT_ID_WEB>
-
-EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
-EMAIL_HOST=smtp.gmail.com
-EMAIL_PORT=587
-EMAIL_HOST_USER=<EMAIL>
-EMAIL_HOST_PASSWORD=<SENHA_DE_APP>
-EMAIL_USE_TLS=True
-EMAIL_TIMEOUT=10
-DEFAULT_FROM_EMAIL=Pires Panificadora <EMAIL_VALIDO>
-
-MERCADO_PAGO_ACCESS_TOKEN=<ACCESS_TOKEN_PRODUCAO>
-MERCADO_PAGO_WEBHOOK_SECRET=<SECRET_WEBHOOK_PRODUCAO>
-MERCADO_PAGO_WEBHOOK_URL=https://backend-pires.class.fabricadesoftware.ifc.edu.br/api/pedidos/mercado_pago_webhook/
-MERCADO_PAGO_API_BASE_URL=https://api.mercadopago.com
-MERCADO_PAGO_TIMEOUT_SECONDS=15
-MERCADO_PAGO_SANDBOX=False
-
-PAGAMENTO_TEMPO_LIMITE_MINUTOS=45
-PEDIDO_TEMPO_LIMITE_RETIRADA_MINUTOS=15
-
-VERIFICATION_CODE_TTL_MINUTES=10
-VERIFICATION_MAX_ATTEMPTS=5
-VERIFICATION_RESEND_COOLDOWN_SECONDS=60
-
-CHAT_PRAZO_APOS_ENCERRAMENTO_HORAS=24
-CHAT_MENSAGEM_TAMANHO_MAXIMO=1000
-THROTTLE_CHAT_MENSAGEM=20/min
-
-CHATBOT_PROVEDOR=chatbot.services.regras.ProvedorRegras
-THROTTLE_CHATBOT=30/min
-```
-
-Nunca versione valores reais de:
-
-- `SECRET_KEY`;
-- `DATABASE_URL`;
-- `CLOUDINARY_URL`;
-- senha SMTP;
-- Access Token;
-- Webhook Secret.
-
-## Configuração de produção
-
-O projeto está preparado para operar atrás de proxy HTTPS, incluindo:
-
-- `SECURE_PROXY_SSL_HEADER`;
-- cookies seguros quando `DEBUG=False`;
-- CORS e CSRF por origem permitida;
-- `STATIC_ROOT`;
-- WhiteNoise;
-- Cloudinary quando configurado;
-- banco via `DATABASE_URL`.
-
-## Deploy
-
-Antes do deploy:
-
-```bash
 pdm run python manage.py check
-pdm run python manage.py makemigrations --check
-pdm run python manage.py test
+pdm run python manage.py makemigrations --check --dry-run
+pdm run ruff check .
 ```
 
-Durante o deploy, devem ocorrer as etapas equivalentes a:
+A integração contínua (`.github/workflows/ci.yml`) executa as mesmas verificações a cada pull request. Os testes não usam serviços externos: Mercado Pago, Google e e-mail são simulados.
 
-```bash
-python manage.py migrate
-python manage.py collectstatic --noinput
-gunicorn app.wsgi
-```
+## Publicação
 
-Use os comandos configurados na plataforma quando aplicável.
+O backend é publicado no Fabroku (IFC) a partir da branch `main`. O `Procfile` aplica as migrações a cada publicação e sobe o servidor ASGI (Uvicorn com 2 workers). As variáveis de produção estão descritas em `.env.production.example`; os valores reais são configurados no painel do Fabroku e nunca vão para o repositório.
 
-O repositório também contém:
+## Detalhes do Projeto
 
-```text
-Procfile
-build.sh
-runtime.txt
-```
+Esse projeto utiliza os seguintes pacotes e tecnologias:
 
-para suportar o processo de publicação.
+- [PDM](https://pdm-project.org/): gerenciador de pacotes e ambiente virtual.
+- [Django 5.2](https://www.djangoproject.com/) e [Django REST Framework](https://www.django-rest-framework.org/): framework web e de APIs REST.
+- [Simple JWT](https://django-rest-framework-simplejwt.readthedocs.io/): autenticação JWT, com lista de bloqueio para tokens revogados.
+- [django-filter](https://django-filter.readthedocs.io/): filtros nas listagens.
+- [drf-spectacular](https://drf-spectacular.readthedocs.io/): documentação OpenAPI (Swagger e ReDoc).
+- [PostgreSQL](https://www.postgresql.org/) em produção e [SQLite](https://www.sqlite.org/) em desenvolvimento, configurados por [dj-database-url](https://pypi.org/project/dj-database-url/).
+- [Cloudinary](https://cloudinary.com/): armazenamento das imagens dos produtos e das fotos de perfil.
+- [Mercado Pago](https://www.mercadopago.com.br/developers): pagamentos por Pix e cartão (Orders API), com webhook validado por assinatura.
+- [google-auth](https://pypi.org/project/google-auth/): login com a conta Google.
+- [Django Channels](https://channels.readthedocs.io/), [channels-redis](https://pypi.org/project/channels-redis/) e [Uvicorn](https://www.uvicorn.org/): servidor ASGI e atualização em tempo real.
+- [qrcode](https://pypi.org/project/qrcode/): geração do QR Code de retirada.
+- [django-cors-headers](https://pypi.org/project/django-cors-headers/), [WhiteNoise](https://whitenoise.readthedocs.io/), [requests](https://pypi.org/project/requests/) e [python-dotenv](https://pypi.org/project/python-dotenv/).
+- [Ruff](https://docs.astral.sh/ruff/): linter e formatador.
 
-## Preflight
+## Licença
 
-Antes de uma entrega ou nova versão, valide:
-
-```text
-Django check
-migrations --check
-testes automatizados
-build do frontend
-```
-
-O projeto deve ir para produção somente depois dessas etapas passarem.
-
-## Smoke test de produção
-
-Depois do deploy, valide:
-
-1. API responde em HTTPS;
-2. login comum;
-3. refresh JWT;
-4. login Google;
-5. catálogo;
-6. promoções;
-7. favoritos;
-8. upload de imagem;
-9. envio de e-mail;
-10. criação de pedido;
-11. dinheiro na retirada;
-12. Pix;
-13. cartão;
-14. webhook retorna `200`;
-15. pedido muda para confirmado após pagamento aprovado;
-16. administração altera o pedido para pronto;
-17. cliente visualiza QR Code;
-18. admin confirma retirada;
-19. cancelamento devolve estoque quando aplicável;
-20. logs não exibem segredos.
-
-## Fluxo completo de pagamento online
-
-```text
-Cliente
-  ↓
-Frontend
-  ↓
-Backend
-  ↓
-Mercado Pago
-  ↓
-Order / pagamento
-  ↓
-Webhook
-  ↓
-Backend valida o evento
-  ↓
-Pagamento aprovado
-  ↓
-Pedido confirmado
-```
-
-## Fluxo completo de retirada
-
-```text
-Pedido confirmado
-  ↓
-Admin prepara
-  ↓
-Pronto
-  ↓
-Cliente recebe QR Code
-  ↓
-Admin escaneia
-  ↓
-Retirado
-```
-
-## Segurança
-
-Regras essenciais:
-
-- `DEBUG=False` em produção;
-- não confiar em preços enviados pelo frontend;
-- não confiar em status financeiro enviado pelo frontend;
-- não expor Access Token;
-- não expor Webhook Secret;
-- não logar tokens e segredos;
-- restringir `ALLOWED_HOSTS`;
-- restringir `FRONTEND_URLS`;
-- usar HTTPS;
-- armazenar mídia em serviço persistente;
-- utilizar PostgreSQL em produção;
-- manter backups do banco e da mídia;
-- rejeitar assinatura inválida no webhook de produção;
-- rotacionar credenciais que tenham sido expostas em logs ou arquivos compartilhados.
-
-## Estado atual
-
-O núcleo funcional está concluído e o sistema possui ambiente de produção configurado.
-
-A aplicação está preparada para operação com:
-
-- frontend na Vercel;
-- backend no Fabroku;
-- PostgreSQL;
-- Cloudinary;
-- autenticação JWT e Google;
-- Mercado Pago em produção;
-- Webhook de Orders;
-- Pix;
-- cartão;
-- retirada por QR Code.
-
-Alterações futuras devem ser submetidas novamente ao preflight e ao smoke test antes de publicação.
+Este projeto está licenciado sob a licença MIT, conforme o `pyproject.toml`.
