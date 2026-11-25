@@ -3,7 +3,6 @@
 from django.core.exceptions import ValidationError
 from django.db import models
 
-# Intenções respondidas pelo código (consultam dados do usuário); não podem virar FAQ.
 CHAVES_RESERVADAS = {'inicio', 'fallback', 'meus_pedidos', 'falar_com_padaria', 'disponibilidade'}
 
 

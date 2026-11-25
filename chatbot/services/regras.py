@@ -22,10 +22,8 @@ STATUS_ATIVOS = (Pedido.Status.PENDENTE, Pedido.Status.CONFIRMADO, Pedido.Status
 MAXIMO_PEDIDOS = 5
 MAXIMO_PRODUTOS = 5
 MAXIMO_SUGESTOES_APOS_RESPOSTA = 3
-# Uma pergunta curta só com o nome do produto ("coxinha?") também conta como disponibilidade.
 MAXIMO_PALAVRAS_PERGUNTA_CURTA = 3
 PESO_PRODUTO_ENCONTRADO = 2
-# Palavras menores que isso no nome do produto ("de", "e") não identificam o produto.
 TAMANHO_MINIMO_PALAVRA_PRODUTO = 4
 
 PALAVRAS_MEUS_PEDIDOS = [
@@ -49,7 +47,6 @@ PALAVRAS_FALAR_COM_PADARIA = [
     'reclam*',
 ]
 PALAVRAS_DISPONIBILIDADE = ['tem', 'ainda tem', 'estoque', 'disponivel', 'disponiveis', 'acabou', 'esgot*']
-# Palavras do nome do produto que não identificam o produto sozinhas.
 PALAVRAS_IGNORADAS_NO_PRODUTO = {'com', 'sem', 'para', 'tipo'}
 
 TEXTO_STATUS = {
@@ -155,8 +152,6 @@ class ProvedorRegras(ProvedorResposta):
             return self._responder_intencao(usuario, intencao)
         return self._responder_texto(usuario, texto or '')
 
-    # ---- Escolha da intenção -------------------------------------------------
-
     def _responder_intencao(self, usuario, intencao):
         dinamicas = {
             'inicio': self._inicio,
@@ -193,7 +188,6 @@ class ProvedorRegras(ProvedorResposta):
         ]
         melhor_dinamica = None
         for pontos, responder in dinamicas:
-            # Empate com a FAQ: vale a FAQ (pontuação estritamente maior para a intenção dinâmica).
             if pontos > melhor_pontos:
                 melhor_dinamica, melhor_pontos = responder, pontos
 
@@ -202,8 +196,6 @@ class ProvedorRegras(ProvedorResposta):
         if melhor_faq:
             return self._responder_faq(melhor_faq)
         return self._fallback()
-
-    # ---- Respostas -------------------------------------------------------------
 
     def _sugestoes_faq(self, excluir=None, limite=None):
         sugeridas = PerguntaFrequente.objects.filter(ativa=True, sugerida=True)
@@ -306,7 +298,6 @@ class ProvedorRegras(ProvedorResposta):
                 for palavra in normalizar(produto.nome).split()
                 if len(palavra) >= TAMANHO_MINIMO_PALAVRA_PRODUTO and palavra not in PALAVRAS_IGNORADAS_NO_PRODUTO
             ]
-            # Aceita o plural simples ("coxinhas" acha "Coxinha").
             coincidencias = sum(
                 1 for palavra in palavras_do_nome if palavra in palavras_do_texto or f'{palavra}s' in palavras_do_texto
             )

@@ -27,7 +27,6 @@ def mensagem_notificacao_chat(pedido):
 
 @receiver(mensagem_da_padaria_enviada)
 def criar_notificacao_mensagem_chat(sender, mensagem, pedido, **kwargs):
-    # Uma notificação não lida por pedido basta: várias mensagens seguidas não lotam o sininho.
     Notificacao.objects.get_or_create(
         usuario=pedido.usuario,
         pedido=pedido,

@@ -58,8 +58,6 @@ def _cancelar_pronto_expirado(pedido, agora, resultado):
 
 
 def _cancelar_pagamento_expirado(pedido, agora, resultado):
-    # Uma order sem ID após timeout é um estado financeiro incerto. Não liberamos
-    # estoque até que a tentativa seja conciliada.
     if not pedido.mercadopago_order_id:
         resultado.ignorados_por_falha += 1
         logger.warning('Expiração: pedido #%s sem order do Mercado Pago; mantido para conciliação.', pedido.pk)
@@ -119,7 +117,6 @@ def expirar_pedidos(agora=None):
     agora = agora or timezone.now()
     resultado = ResultadoExpiracao()
 
-    # 1) Pedidos prontos que não foram retirados no prazo (RN06).
     limite_retirada = agora - timedelta(minutes=settings.PEDIDO_TEMPO_LIMITE_RETIRADA_MINUTOS)
     prontos_expirados = Pedido.objects.filter(
         status=Pedido.Status.PRONTO,
@@ -129,8 +126,6 @@ def expirar_pedidos(agora=None):
         if _cancelar_pronto_expirado(pedido, agora, resultado):
             resultado.cancelados_retirada += 1
 
-    # 2) Checkouts online sem pagamento concluído. Pedidos antigos criados antes de existir
-    #    `pagamento_expira_em` usam a data de criação como referência.
     limite_pagamento = agora - timedelta(minutes=max(int(settings.PAGAMENTO_TEMPO_LIMITE_MINUTOS), 45))
     online_expirados = (
         Pedido.objects.filter(forma_pagamento__in=PAGAMENTOS_ONLINE)
@@ -150,7 +145,6 @@ def expirar_pedidos(agora=None):
         if _cancelar_pagamento_expirado(pedido, agora, resultado):
             resultado.cancelados_pagamento += 1
 
-    # 3) Pedidos confirmados que ninguém preparou. Desligado por padrão (0), pois cancela e reembolsa.
     horas_preparo = settings.PEDIDO_TEMPO_LIMITE_PREPARO_HORAS
     if horas_preparo > 0:
         limite_preparo = agora - timedelta(hours=horas_preparo)

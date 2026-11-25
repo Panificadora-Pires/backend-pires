@@ -16,7 +16,6 @@ class ChatbotViewSet(ViewSet):
     """
 
     permission_classes = [IsAuthenticated]
-    # Só o envio de perguntas tem escopo próprio (definido no @action).
     throttle_scope = None
 
     @extend_schema(summary='Mensagem de abertura e assuntos sugeridos')

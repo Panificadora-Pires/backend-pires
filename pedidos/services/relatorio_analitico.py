@@ -69,8 +69,6 @@ def gerar_relatorio_analitico(data_inicio, data_fim):
     anterior_inicio = data_inicio - timedelta(days=duracao)
     anterior_fim = data_inicio - timedelta(days=1)
 
-    # Intervalo semiaberto permite usar o índice de status+timestamp sem filtrar
-    # por __date, e respeita a data civil local na virada de meia-noite.
     primeiro_instante = datetime.combine(anterior_inicio, time.min, tzinfo=FUSO)
     ultimo_instante = datetime.combine(data_fim + timedelta(days=1), time.min, tzinfo=FUSO)
 

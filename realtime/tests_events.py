@@ -15,7 +15,6 @@ from realtime.events import ADMIN_GROUP, _enviar_com_limite, publicar_evento
 
 class PublicacaoReativaTestCase(TestCase):
     def setUp(self):
-        # Não gerar sinais na preparação dos dados, mesmo com env de staging.
         with override_settings(REALTIME_ENABLED=False):
             self.cliente = User.objects.create_user(
                 email='eventos-cliente@example.com', password='Senha!123',
@@ -193,5 +192,4 @@ class PublicacaoReativaTestCase(TestCase):
         from realtime.events import _entregar
 
         with patch('realtime.events.get_channel_layer', side_effect=OSError('redis indisponível')):
-            # Best effort: a API HTTP deve continuar mesmo sem transporte WS.
             _entregar((ADMIN_GROUP,), {'tipo': 'pedido.atualizado'})

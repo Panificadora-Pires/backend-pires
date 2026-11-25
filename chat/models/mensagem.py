@@ -35,7 +35,6 @@ class Mensagem(models.Model):
         verbose_name_plural = 'Mensagens'
         ordering = ['criada_em', 'id']
         indexes = [
-            # Contagem de não lidas de cada lado da conversa.
             models.Index(fields=['enviada_pela_padaria', 'lida_em'], name='chat_msg_nao_lidas_idx'),
             models.Index(fields=['conversa', 'criada_em'], name='chat_msg_conversa_data_idx'),
         ]

@@ -93,7 +93,6 @@ def _validar_limite_de_pedidos_pendentes(usuario):
     if limite <= 0:
         return
 
-    # Serializa as criações de pedido do mesmo usuário para a contagem abaixo ser confiável.
     get_user_model().objects.select_for_update().get(pk=usuario.pk)
 
     pendentes = Pedido.objects.filter(usuario=usuario, status=Pedido.Status.PENDENTE).count()

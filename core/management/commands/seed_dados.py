@@ -80,7 +80,6 @@ class Command(BaseCommand):
         return categorias
 
     def _criar_produtos(self, categorias):
-        # nome, categoria, preco, preco_custo, estoque, unidade, destaque
         dados = [
             ('Coxinha de frango', 'Salgados', 8.00, 3.50, 25, 'unidade', True),
             ('Pastel de carne', 'Salgados', 7.50, 3.00, 20, 'unidade', False),
@@ -117,7 +116,6 @@ class Command(BaseCommand):
 
     def _criar_promocoes(self, produtos):
         hoje = date.today()
-        # nome do produto, preço promocional, dias de início (relativo a hoje), dias de fim
         dados = [
             ('Coxinha de frango', 6.50, -1, 3),
             ('Brigadeiro', 2.50, -2, 5),
@@ -162,7 +160,6 @@ class Command(BaseCommand):
             self.stdout.write('  já existem pedidos no banco, pulando criação de pedidos de exemplo.')
             return
 
-        # aluno, itens [(produto, quantidade), ...], status final desejado
         exemplos = [
             (alunos[0], [('Coxinha de frango', 2), ('Suco de laranja', 1)], Pedido.Status.RETIRADO),
             (alunos[1], [('Brigadeiro', 3), ('Água mineral', 1)], Pedido.Status.PRONTO),
@@ -179,7 +176,6 @@ class Command(BaseCommand):
                     quantidade=quantidade,
                     preco_unitario=produto.preco_atual,
                 )
-                # Mantém coerência com a RN02 (baixa de estoque no momento do pedido)
                 produto.estoque = max(produto.estoque - quantidade, 0)
                 produto.save(update_fields=['estoque'])
             self.stdout.write(f'  + pedido #{pedido.id} criado para {aluno.email} ({status_final})')

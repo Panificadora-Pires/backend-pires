@@ -37,7 +37,6 @@ def env_list(nome, padrao=''):
     ]
 
 
-# Fail closed: .env.example ativa DEBUG=True apenas em desenvolvimento.
 DEBUG = env_bool(
     'DEBUG',
     False,
@@ -78,13 +77,9 @@ FRONTEND_URLS = env_list(
 
 CORS_ALLOWED_ORIGINS = FRONTEND_URLS
 CSRF_TRUSTED_ORIGINS = FRONTEND_URLS
-# A API usa JWT em header Authorization; não depende de cookies entre origens.
 CORS_ALLOW_CREDENTIALS = False
 
-# PR6A.1: transporte opt-in. O Procfile WSGI e o polling seguem inalterados.
-# Redis privado e proxy WSS devem ser validados no Fabroku antes da ativação.
 REALTIME_ENABLED = env_bool('REALTIME_ENABLED', False)
-# Fabroku/Dokku vincula Redis como REDIS_URL; override exclusivo via REALTIME_REDIS_URL.
 REALTIME_REDIS_URL = (os.getenv('REALTIME_REDIS_URL') or os.getenv('REDIS_URL') or '').strip()
 REALTIME_ALLOWED_ORIGINS = env_list('REALTIME_ALLOWED_ORIGINS', ','.join(FRONTEND_URLS))
 REALTIME_TICKET_TTL_SECONDS = int(os.getenv('REALTIME_TICKET_TTL_SECONDS', '45'))
@@ -99,7 +94,6 @@ if REALTIME_ENABLED:
         raise RuntimeError('REALTIME_REDIS_URL deve apontar para um Redis privado válido.')
     if not REALTIME_ALLOWED_ORIGINS:
         raise RuntimeError('REALTIME_ALLOWED_ORIGINS precisa de origens explícitas.')
-    # Sem InMemoryChannelLayer em produção: grupos entre workers exigem Redis.
     CHANNEL_LAYERS = {
         'default': {
             'BACKEND': 'channels_redis.core.RedisChannelLayer',
@@ -125,14 +119,11 @@ SECURE_REFERRER_POLICY = 'same-origin'
 SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin'
 X_FRAME_OPTIONS = 'DENY'
 
-# Opcionais: ative no servidor depois de confirmar que o proxy HTTPS envia X-Forwarded-Proto.
 SECURE_SSL_REDIRECT = env_bool('SECURE_SSL_REDIRECT', False)
 SECURE_HSTS_SECONDS = int(os.getenv('SECURE_HSTS_SECONDS', '0'))
 SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool('SECURE_HSTS_INCLUDE_SUBDOMAINS', False)
 SECURE_HSTS_PRELOAD = env_bool('SECURE_HSTS_PRELOAD', False)
 
-# Documentação interativa (Swagger/ReDoc/schema). Em produção fica desligada, a menos que
-# ENABLE_API_DOCS=True. Em desenvolvimento (DEBUG=True) fica ligada.
 ENABLE_API_DOCS = env_bool('ENABLE_API_DOCS', DEBUG)
 
 
@@ -143,8 +134,6 @@ PEDIDO_TEMPO_LIMITE_RETIRADA_MINUTOS = int(
     )
 )
 
-# Cancela (e reembolsa, se pago online) pedidos "confirmados" que ninguém preparou após N horas.
-# 0 desliga a regra.
 PEDIDO_TEMPO_LIMITE_PREPARO_HORAS = int(
     os.getenv(
         'PEDIDO_TEMPO_LIMITE_PREPARO_HORAS',
@@ -152,21 +141,15 @@ PEDIDO_TEMPO_LIMITE_PREPARO_HORAS = int(
     )
 )
 
-# Proteção contra abuso de reserva de estoque.
 PEDIDO_QUANTIDADE_MAXIMA_POR_ITEM = int(os.getenv('PEDIDO_QUANTIDADE_MAXIMA_POR_ITEM', '50'))
 PEDIDO_MAXIMO_ITENS_DIFERENTES = int(os.getenv('PEDIDO_MAXIMO_ITENS_DIFERENTES', '30'))
 PEDIDO_MAXIMO_PENDENTES_POR_USUARIO = int(os.getenv('PEDIDO_MAXIMO_PENDENTES_POR_USUARIO', '5'))
 
-# Token para o agendador externo chamar POST /api/manutencao/expirar-pedidos/.
-# Sem valor, o endpoint fica desativado.
 MANUTENCAO_TOKEN = os.getenv('MANUTENCAO_TOKEN', '').strip()
 
-# Chat por pedido: por quantas horas após `retirado`/`cancelado` ainda é possível enviar mensagens.
 CHAT_PRAZO_APOS_ENCERRAMENTO_HORAS = int(os.getenv('CHAT_PRAZO_APOS_ENCERRAMENTO_HORAS', '24'))
 CHAT_MENSAGEM_TAMANHO_MAXIMO = int(os.getenv('CHAT_MENSAGEM_TAMANHO_MAXIMO', '1000'))
 
-# Chatbot de ajuda: classe que responde às perguntas. Troque por outra subclasse de
-# chatbot.services.provedores.ProvedorResposta para plugar uma IA no futuro.
 CHATBOT_PROVEDOR = os.getenv('CHATBOT_PROVEDOR', 'chatbot.services.regras.ProvedorRegras')
 
 
@@ -359,8 +342,6 @@ TEMPLATES = [
 ]
 
 
-# Rejeita config de banco ausente/SQLite antes de atender requisições
-# quando DEBUG=False. A CI e o desenvolvimento com DEBUG=True seguem em SQLite.
 exigir_banco_de_producao(
     debug=DEBUG,
     database_url=os.getenv('DATABASE_URL', ''),
@@ -459,11 +440,9 @@ REST_FRAMEWORK = {
             'authentication.JWTAuthentication'
         ),
     ),
-    # Negado por padrão: toda view que precisa de acesso anônimo declara AllowAny explicitamente.
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
     ),
-    # Sem Browsable API em produção: respostas somente em JSON.
     'DEFAULT_RENDERER_CLASSES': (
         (
             'rest_framework.renderers.JSONRenderer',
@@ -491,7 +470,6 @@ REST_FRAMEWORK = {
     ),
     'PAGE_SIZE': 10,
     'DEFAULT_THROTTLE_RATES': {
-        # Limites gerais. O usuário logado precisa de folga para o painel que atualiza sozinho.
         'anon': os.getenv('THROTTLE_ANON', '300/hour'),
         'user': os.getenv('THROTTLE_USER', '6000/hour'),
         'manutencao': '60/hour',
@@ -533,7 +511,6 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': (
         'Bearer',
     ),
-    # Invalida tokens emitidos antes de uma troca de senha.
     'CHECK_REVOKE_TOKEN': True,
 }
 
@@ -594,9 +571,6 @@ LOGGING = {
 }
 
 
-# ============================================================
-# Mercado Pago / Checkout Transparente
-# ============================================================
 MERCADO_PAGO_ACCESS_TOKEN = os.getenv(
     'MERCADO_PAGO_ACCESS_TOKEN',
     '',
